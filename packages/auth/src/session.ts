@@ -1,5 +1,11 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
+import { and, eq, gt, isNull } from "drizzle-orm";
+
+import type { PrivilegedDatabaseClient } from "@felixos/db";
+import { sessions } from "@felixos/db";
+import type { SessionPayload } from "@felixos/shared-types";
+
 export const sessionCookieName = "felixos_session";
 
 export type CreatedSession = {
@@ -31,6 +37,25 @@ export function createSession(
 
 export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("base64url");
+}
+
+export async function validateSession(
+  privilegedDb: PrivilegedDatabaseClient,
+  sessionToken: string
+): Promise<SessionPayload | null> {
+  const hash = hashSessionToken(sessionToken);
+  const [row] = await privilegedDb.db
+    .select({ id: sessions.id, tenantId: sessions.tenantId })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.sessionHash, hash),
+        gt(sessions.expiresAt, new Date()),
+        isNull(sessions.revokedAt)
+      )
+    )
+    .limit(1);
+  return row ? { sessionId: row.id, tenantId: row.tenantId } : null;
 }
 
 export function serializeSessionCookie(
