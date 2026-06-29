@@ -14,7 +14,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "echo \"No tests yet\"",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@felixos/db": "workspace:*",
+    "@felixos/shared-types": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "postgres": "^3.4.9",
+    "vitest": "^4.1.9"
   }
 }
