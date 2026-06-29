@@ -16,7 +16,8 @@ The current foundation plan is intentionally horizontal. Do not turn a unit into
 ## Current Stack
 
 - Package manager: `pnpm`.
-- Node runtime: 22 LTS, pinned by `.nvmrc` and `package.json` `engines.node`.
+- Node runtime: 24, pinned by `.nvmrc` and `package.json` `engines.node`.
+- Runtime note: FelixOS intentionally targets Node 24. Earlier scaffold work used Node 22 by default, but there was no project requirement behind that choice; keep local, CI, and deploy runtime checks aligned on Node 24.
 - Build system: Turborepo.
 - Language: TypeScript end to end.
 - Apps: `apps/web`, `apps/api`, `apps/cli`.
