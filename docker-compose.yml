@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-felixos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-felixos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: pgvector/pgvector:pg18
+    volumes:
+      - ./packages/db/migrations:/migrations:ro
+      - ./infra/migrate.sh:/migrate.sh:ro
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-felixos}
+      # Explicit credentials for the two login users to provision.
+      # Kept separate from DATABASE_URL so no URL parsing is needed.
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
+      APP_DB_PASS: ${APP_DB_PASS:?APP_DB_PASS is required}
+      PRIV_DB_USER: ${PRIV_DB_USER:?PRIV_DB_USER is required}
+      PRIV_DB_PASS: ${PRIV_DB_PASS:?PRIV_DB_PASS is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "/migrate.sh"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_PRIVILEGED_URL: ${DATABASE_PRIVILEGED_URL:?DATABASE_PRIVILEGED_URL is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      TOTP_SECRET_ENCRYPTION_KEY: ${TOTP_SECRET_ENCRYPTION_KEY:?TOTP_SECRET_ENCRYPTION_KEY is required}
+      API_PORT: ${API_PORT:-3001}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${API_PORT:-3001}/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # next.config.ts captures this at build time to bake rewrites destinations.
+        FELIXOS_API_ORIGIN: ${FELIXOS_API_ORIGIN:-http://api:3001}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      FELIXOS_API_ORIGIN: ${FELIXOS_API_ORIGIN:-http://api:3001}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+
+# n8n is an existing external container; connect to it via its network.
+# Add its network name here if routes between services require it:
+# networks:
+#   default:
+#     external: true
+#     name: n8n_default
