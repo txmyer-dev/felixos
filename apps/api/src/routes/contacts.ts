@@ -3,17 +3,23 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { withRequestTenant } from "./context.js";
+
 export const contactRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
-    const rows = await request.server.scopedDb.transaction((tx) =>
-      tx.select().from(contacts).orderBy(contacts.createdAt)
+    const rows = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(contacts).orderBy(contacts.createdAt)
+      )
     );
     return reply.send({ ok: true, data: rows.map(toView) });
   });
 
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx.select().from(contacts).where(eq(contacts.id, request.params.id)).limit(1)
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(contacts).where(eq(contacts.id, request.params.id)).limit(1)
+      )
     );
     if (!row) {
       return reply
@@ -33,19 +39,21 @@ export const contactRoutes: FastifyPluginAsync = async (fastify) => {
         error: { code: "bad_request", message: "accountId and name are required" }
       });
     }
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx
-        .insert(contacts)
-        .values({
-          id: randomUUID(),
-          tenantId: request.tenantId,
-          accountId,
-          name,
-          email,
-          phone,
-          role
-        })
-        .returning()
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx
+          .insert(contacts)
+          .values({
+            id: randomUUID(),
+            tenantId: request.tenantId,
+            accountId,
+            name,
+            email,
+            phone,
+            role
+          })
+          .returning()
+      )
     );
     return reply.status(201).send({ ok: true, data: toView(row!) });
   });

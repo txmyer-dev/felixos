@@ -2,7 +2,6 @@ import { authenticateRecoveryCode, authenticateTotp, serializeSessionCookie } fr
 import { tenants } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
-
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: { tenantSlug?: string; code?: string; recoveryCode?: string };

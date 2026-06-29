@@ -3,17 +3,23 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { withRequestTenant } from "./context.js";
+
 export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
-    const rows = await request.server.scopedDb.transaction((tx) =>
-      tx.select().from(interactions).orderBy(interactions.occurredAt)
+    const rows = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(interactions).orderBy(interactions.occurredAt)
+      )
     );
     return reply.send({ ok: true, data: rows.map(toView) });
   });
 
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx.select().from(interactions).where(eq(interactions.id, request.params.id)).limit(1)
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(interactions).where(eq(interactions.id, request.params.id)).limit(1)
+      )
     );
     if (!row) {
       return reply
@@ -42,19 +48,21 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
         }
       });
     }
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx
-        .insert(interactions)
-        .values({
-          id: randomUUID(),
-          tenantId: request.tenantId,
-          accountId,
-          contactId: contactId ?? null,
-          kind: kind as (typeof interactions.$inferInsert)["kind"],
-          occurredAt: new Date(occurredAt),
-          summary
-        })
-        .returning()
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx
+          .insert(interactions)
+          .values({
+            id: randomUUID(),
+            tenantId: request.tenantId,
+            accountId,
+            contactId: contactId ?? null,
+            kind: kind as (typeof interactions.$inferInsert)["kind"],
+            occurredAt: new Date(occurredAt),
+            summary
+          })
+          .returning()
+      )
     );
     return reply.status(201).send({ ok: true, data: toView(row!) });
   });

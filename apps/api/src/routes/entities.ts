@@ -3,17 +3,23 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { withRequestTenant } from "./context.js";
+
 export const entityRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
-    const rows = await request.server.scopedDb.transaction((tx) =>
-      tx.select().from(entities).orderBy(entities.createdAt)
+    const rows = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(entities).orderBy(entities.createdAt)
+      )
     );
     return reply.send({ ok: true, data: rows.map(toView) });
   });
 
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx.select().from(entities).where(eq(entities.id, request.params.id)).limit(1)
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(entities).where(eq(entities.id, request.params.id)).limit(1)
+      )
     );
     if (!row) {
       return reply
@@ -32,16 +38,18 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
         .status(400)
         .send({ ok: false, error: { code: "bad_request", message: "name is required" } });
     }
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx
-        .insert(entities)
-        .values({
-          id: randomUUID(),
-          tenantId: request.tenantId,
-          name,
-          lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"]
-        })
-        .returning()
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx
+          .insert(entities)
+          .values({
+            id: randomUUID(),
+            tenantId: request.tenantId,
+            name,
+            lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"]
+          })
+          .returning()
+      )
     );
     return reply.status(201).send({ ok: true, data: toView(row!) });
   });
@@ -56,15 +64,17 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
         .status(400)
         .send({ ok: false, error: { code: "bad_request", message: "lifecycleStage is required" } });
     }
-    const [row] = await request.server.scopedDb.transaction((tx) =>
-      tx
-        .update(entities)
-        .set({
-          lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"],
-          updatedAt: new Date()
-        })
-        .where(eq(entities.id, request.params.id))
-        .returning()
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx
+          .update(entities)
+          .set({
+            lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"],
+            updatedAt: new Date()
+          })
+          .where(eq(entities.id, request.params.id))
+          .returning()
+      )
     );
     if (!row) {
       return reply

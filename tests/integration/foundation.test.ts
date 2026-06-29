@@ -39,7 +39,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const privilegedDatabaseUrl = process.env.DATABASE_PRIVILEGED_URL;
 const rawKey = process.env.TOTP_SECRET_ENCRYPTION_KEY;
 const fallbackDatabaseUrl = "postgres://unused:unused@localhost:5432/unused";
-const fallbackEncryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const fallbackEncryptionKey = "0000000000000000000000000000000000000000000000000000000000000000";
 const appRoleName = "felixos_app_role";
 const migrationUrls = [
   new URL("../../packages/db/migrations/0000_foundation_schema.sql", import.meta.url),
