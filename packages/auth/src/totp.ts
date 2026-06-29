@@ -99,7 +99,7 @@ export function readTotpEncryptionKey(encodedKey: string | undefined): Buffer {
     throw new Error("TOTP_SECRET_ENCRYPTION_KEY is required");
   }
 
-  const key = Buffer.from(encodedKey, "base64url");
+  const key = Buffer.from(encodedKey, "hex");
   assertEncryptionKey(key);
   return key;
 }

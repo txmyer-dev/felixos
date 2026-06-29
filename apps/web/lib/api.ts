@@ -2,22 +2,7 @@ import "server-only";
 
 import { cookies, headers } from "next/headers";
 
-import type { Account, ApiResult, LoginResponse } from "@felixos/shared-types";
-
-export async function login(input: {
-  tenantSlug: string;
-  code?: string;
-  recoveryCode?: string;
-}): Promise<ApiResult<LoginResponse>> {
-  const response = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(input),
-    cache: "no-store"
-  });
-
-  return response.json() as Promise<ApiResult<LoginResponse>>;
-}
+import type { Account, ApiResult } from "@felixos/shared-types";
 
 export async function fetchAccounts(): Promise<Account[]> {
   const cookieStore = await cookies();
