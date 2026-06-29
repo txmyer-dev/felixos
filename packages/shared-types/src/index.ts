@@ -35,4 +35,13 @@ export type {
   ListResponse,
   PageInfo
 } from "./api.js";
+export type {
+  DistilledItemId,
+  DistilledItemStatus,
+  DistilledItemType,
+  DistilledItemView,
+  KnowledgeSourceType,
+  RawSourceId,
+  RawSourceView
+} from "./knowledge.js";
 export type { SkillDescriptor } from "./skills.js";
