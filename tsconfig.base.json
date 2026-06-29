@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@felixos/auth": ["packages/auth/src/index.ts"],
+      "@felixos/auth/*": ["packages/auth/src/*"],
+      "@felixos/db": ["packages/db/src/index.ts"],
+      "@felixos/db/*": ["packages/db/src/*"],
+      "@felixos/shared-types": ["packages/shared-types/src/index.ts"],
+      "@felixos/shared-types/*": ["packages/shared-types/src/*"]
+    }
+  }
+}
