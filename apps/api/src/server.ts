@@ -12,6 +12,8 @@ import { interactionRoutes } from "./routes/interactions.js";
 
 import type { PrivilegedDatabaseClient, ScopedDatabaseClient } from "@felixos/db";
 
+type DatabaseClientOptions = Parameters<typeof createScopedDatabaseClient>[1];
+
 declare module "fastify" {
   interface FastifyInstance {
     privilegedDb: PrivilegedDatabaseClient;
@@ -26,12 +28,17 @@ export function buildServer(opts: {
   privilegedDatabaseUrl: string;
   encryptionKey: Buffer;
   keyId?: string;
+  databaseOptions?: DatabaseClientOptions;
+  privilegedDatabaseOptions?: DatabaseClientOptions;
   logger?: boolean;
 }) {
   const fastify = Fastify({ logger: opts.logger ?? false });
 
-  const privilegedDb = createPrivilegedDatabaseClient(opts.privilegedDatabaseUrl);
-  const scopedDb = createScopedDatabaseClient(opts.databaseUrl);
+  const privilegedDb = createPrivilegedDatabaseClient(
+    opts.privilegedDatabaseUrl,
+    opts.privilegedDatabaseOptions
+  );
+  const scopedDb = createScopedDatabaseClient(opts.databaseUrl, opts.databaseOptions);
 
   fastify.register(
     fp(async (f) => {

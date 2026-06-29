@@ -14,7 +14,8 @@ import { buildServer } from "./server.js";
 const databaseUrl = process.env.DATABASE_URL ?? process.env.TEST_DATABASE_URL;
 const privilegedDatabaseUrl = process.env.DATABASE_PRIVILEGED_URL ?? process.env.TEST_DATABASE_URL;
 const rawKey =
-  process.env.TOTP_SECRET_ENCRYPTION_KEY ?? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  process.env.TOTP_SECRET_ENCRYPTION_KEY ??
+  "0000000000000000000000000000000000000000000000000000000000000000";
 const migrationUrls = [
   new URL("../../../packages/db/migrations/0000_foundation_schema.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0001_rls_policies.sql", import.meta.url)

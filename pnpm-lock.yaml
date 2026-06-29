@@ -142,6 +142,37 @@ importers:
 
   packages/shared-types: {}
 
+  tests/integration:
+    dependencies:
+      '@felixos/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@felixos/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@felixos/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.2
+        version: 24.13.2
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+      fastify:
+        specifier: ^5.3.3
+        version: 5.9.0
+      fastify-plugin:
+        specifier: ^5.0.1
+        version: 5.1.0
+      tsx:
+        specifier: ^4.20.3
+        version: 4.22.4
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@24.13.2)(vite@8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4))
+
 packages:
 
   '@drizzle-team/brocli@0.10.2':
