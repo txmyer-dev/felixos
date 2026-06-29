@@ -17,12 +17,11 @@ COPY tsconfig.base.json ./
 COPY packages/shared-types/src ./packages/shared-types/src
 COPY packages/db/src ./packages/db/src
 COPY packages/auth/src ./packages/auth/src
-COPY apps/web/src ./apps/web/src
+COPY apps/web/next.config.ts ./apps/web/
 COPY apps/web/tsconfig.json ./apps/web/
-# Next.js specific config files
-COPY apps/web/next.config.* ./apps/web/ 2>/dev/null || true
-COPY apps/web/app ./apps/web/app 2>/dev/null || true
-COPY apps/web/public ./apps/web/public 2>/dev/null || true
+COPY apps/web/app ./apps/web/app
+COPY apps/web/lib ./apps/web/lib
+COPY apps/web/middleware.ts ./apps/web/
 WORKDIR /app/apps/web
 RUN pnpm build
 
@@ -31,7 +30,6 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./.next/static
-COPY --from=build /app/apps/web/public ./public 2>/dev/null || true
 
 EXPOSE 3000
 CMD ["node", "server.js"]

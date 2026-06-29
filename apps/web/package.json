@@ -4,9 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "eslint \"src/**/*.ts\"",
-    "test": "echo \"No tests yet\"",
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "eslint \"app/**/*.{ts,tsx}\" \"lib/**/*.ts\" \"middleware.ts\" \"next.config.ts\"",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@felixos/shared-types": "workspace:*",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "vitest": "^4.1.9"
   }
 }
