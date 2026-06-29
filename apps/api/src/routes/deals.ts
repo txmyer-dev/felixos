@@ -2,9 +2,8 @@ import { deals } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
-import fp from "fastify-plugin";
 
-export const dealRoutes: FastifyPluginAsync = fp(async (fastify) => {
+export const dealRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await request.server.scopedDb.transaction((tx) =>
       tx.select().from(deals).orderBy(deals.createdAt)
@@ -29,9 +28,10 @@ export const dealRoutes: FastifyPluginAsync = fp(async (fastify) => {
   }>("/", async (request, reply) => {
     const { accountId, name, stage = "new", valueCents } = request.body ?? {};
     if (!accountId || !name) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "accountId and name are required" } });
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "bad_request", message: "accountId and name are required" }
+      });
     }
     const [row] = await request.server.scopedDb.transaction((tx) =>
       tx
@@ -41,7 +41,7 @@ export const dealRoutes: FastifyPluginAsync = fp(async (fastify) => {
           tenantId: request.tenantId,
           accountId,
           name,
-          stage: stage as typeof deals.$inferInsert["stage"],
+          stage: stage as (typeof deals.$inferInsert)["stage"],
           valueCents
         })
         .returning()
@@ -62,7 +62,7 @@ export const dealRoutes: FastifyPluginAsync = fp(async (fastify) => {
     const [row] = await request.server.scopedDb.transaction((tx) =>
       tx
         .update(deals)
-        .set({ stage: stage as typeof deals.$inferInsert["stage"], updatedAt: new Date() })
+        .set({ stage: stage as (typeof deals.$inferInsert)["stage"], updatedAt: new Date() })
         .where(eq(deals.id, request.params.id))
         .returning()
     );
@@ -73,7 +73,7 @@ export const dealRoutes: FastifyPluginAsync = fp(async (fastify) => {
     }
     return reply.send({ ok: true, data: toView(row) });
   });
-});
+};
 
 function toView(row: typeof deals.$inferSelect) {
   return {

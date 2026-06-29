@@ -55,3 +55,10 @@ jobs:
 
       - name: Lint, typecheck, test, build
         run: pnpm turbo run lint typecheck test build
+
+      - name: Foundation integration gate
+        run: pnpm --filter @felixos/integration-tests test
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          DATABASE_PRIVILEGED_URL: ${{ env.TEST_DATABASE_URL }}
+          TOTP_SECRET_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA

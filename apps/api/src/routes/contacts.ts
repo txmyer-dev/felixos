@@ -2,9 +2,8 @@ import { contacts } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
-import fp from "fastify-plugin";
 
-export const contactRoutes: FastifyPluginAsync = fp(async (fastify) => {
+export const contactRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await request.server.scopedDb.transaction((tx) =>
       tx.select().from(contacts).orderBy(contacts.createdAt)
@@ -29,19 +28,28 @@ export const contactRoutes: FastifyPluginAsync = fp(async (fastify) => {
   }>("/", async (request, reply) => {
     const { accountId, name, email, phone, role } = request.body ?? {};
     if (!accountId || !name) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "accountId and name are required" } });
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "bad_request", message: "accountId and name are required" }
+      });
     }
     const [row] = await request.server.scopedDb.transaction((tx) =>
       tx
         .insert(contacts)
-        .values({ id: randomUUID(), tenantId: request.tenantId, accountId, name, email, phone, role })
+        .values({
+          id: randomUUID(),
+          tenantId: request.tenantId,
+          accountId,
+          name,
+          email,
+          phone,
+          role
+        })
         .returning()
     );
     return reply.status(201).send({ ok: true, data: toView(row!) });
   });
-});
+};
 
 function toView(row: typeof contacts.$inferSelect) {
   return {

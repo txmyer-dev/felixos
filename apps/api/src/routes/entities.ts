@@ -2,9 +2,8 @@ import { entities } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
-import fp from "fastify-plugin";
 
-export const entityRoutes: FastifyPluginAsync = fp(async (fastify) => {
+export const entityRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await request.server.scopedDb.transaction((tx) =>
       tx.select().from(entities).orderBy(entities.createdAt)
@@ -40,7 +39,7 @@ export const entityRoutes: FastifyPluginAsync = fp(async (fastify) => {
           id: randomUUID(),
           tenantId: request.tenantId,
           name,
-          lifecycleStage: lifecycleStage as typeof entities.$inferInsert["lifecycleStage"]
+          lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"]
         })
         .returning()
     );
@@ -61,7 +60,7 @@ export const entityRoutes: FastifyPluginAsync = fp(async (fastify) => {
       tx
         .update(entities)
         .set({
-          lifecycleStage: lifecycleStage as typeof entities.$inferInsert["lifecycleStage"],
+          lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"],
           updatedAt: new Date()
         })
         .where(eq(entities.id, request.params.id))
@@ -74,7 +73,7 @@ export const entityRoutes: FastifyPluginAsync = fp(async (fastify) => {
     }
     return reply.send({ ok: true, data: toView(row) });
   });
-});
+};
 
 function toView(row: typeof entities.$inferSelect) {
   return {

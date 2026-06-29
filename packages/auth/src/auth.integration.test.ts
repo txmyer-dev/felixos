@@ -217,6 +217,56 @@ describe.skipIf(!databaseUrl)("passwordless auth and provisioning integration", 
     }
   });
 
+  test("only one concurrent recovery-code authentication can consume a code", async () => {
+    if (!databaseUrl) {
+      throw new Error("TEST_DATABASE_URL is required");
+    }
+
+    const key = randomBytes(32);
+    const privileged = createPrivilegedDatabaseClient(databaseUrl, { max: 1 });
+    const scopedA = createScopedDatabaseClient(databaseUrl, { max: 1 });
+    const scopedB = createScopedDatabaseClient(databaseUrl, { max: 1 });
+    await privileged.sql.unsafe(
+      `SET search_path TO ${quoteIdentifier(fixture.schemaName)}, public`
+    );
+    await scopedA.sql.unsafe(`SET search_path TO ${quoteIdentifier(fixture.schemaName)}, public`);
+    await scopedA.sql.unsafe(`SET ROLE ${quoteIdentifier(appRoleName)}`);
+    await scopedB.sql.unsafe(`SET search_path TO ${quoteIdentifier(fixture.schemaName)}, public`);
+    await scopedB.sql.unsafe(`SET ROLE ${quoteIdentifier(appRoleName)}`);
+
+    try {
+      const enrollment = await provisionTenant(privileged, {
+        slug: "concurrent-recovery",
+        name: "Concurrent Recovery Tenant",
+        encryptionKey: key,
+        keyId: "test"
+      });
+      const recoveryCode = enrollment.recoveryCodes[0]?.code;
+
+      if (!recoveryCode) {
+        throw new Error("Expected generated recovery code");
+      }
+
+      const results = await Promise.allSettled([
+        authenticateRecoveryCode(scopedA, {
+          tenantId: enrollment.tenantId,
+          recoveryCode,
+          now: new Date("2026-06-29T12:00:00.000Z")
+        }),
+        authenticateRecoveryCode(scopedB, {
+          tenantId: enrollment.tenantId,
+          recoveryCode,
+          now: new Date("2026-06-29T12:00:00.000Z")
+        })
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    } finally {
+      await Promise.all([scopedA.end(), scopedB.end(), privileged.end()]);
+    }
+  });
+
   test("stores encrypted secrets and hashes without logging enrollment material", async () => {
     if (!databaseUrl) {
       throw new Error("TEST_DATABASE_URL is required");

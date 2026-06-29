@@ -2,9 +2,8 @@ import { interactions } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
-import fp from "fastify-plugin";
 
-export const interactionRoutes: FastifyPluginAsync = fp(async (fastify) => {
+export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await request.server.scopedDb.transaction((tx) =>
       tx.select().from(interactions).orderBy(interactions.occurredAt)
@@ -37,7 +36,10 @@ export const interactionRoutes: FastifyPluginAsync = fp(async (fastify) => {
     if (!accountId || !kind || !occurredAt || !summary) {
       return reply.status(400).send({
         ok: false,
-        error: { code: "bad_request", message: "accountId, kind, occurredAt, and summary are required" }
+        error: {
+          code: "bad_request",
+          message: "accountId, kind, occurredAt, and summary are required"
+        }
       });
     }
     const [row] = await request.server.scopedDb.transaction((tx) =>
@@ -48,7 +50,7 @@ export const interactionRoutes: FastifyPluginAsync = fp(async (fastify) => {
           tenantId: request.tenantId,
           accountId,
           contactId: contactId ?? null,
-          kind: kind as typeof interactions.$inferInsert["kind"],
+          kind: kind as (typeof interactions.$inferInsert)["kind"],
           occurredAt: new Date(occurredAt),
           summary
         })
@@ -56,7 +58,7 @@ export const interactionRoutes: FastifyPluginAsync = fp(async (fastify) => {
     );
     return reply.status(201).send({ ok: true, data: toView(row!) });
   });
-});
+};
 
 function toView(row: typeof interactions.$inferSelect) {
   return {

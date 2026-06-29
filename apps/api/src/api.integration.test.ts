@@ -8,18 +8,20 @@ import { buildServer } from "./server.js";
 const databaseUrl = process.env.DATABASE_URL;
 const privilegedDatabaseUrl = process.env.DATABASE_PRIVILEGED_URL;
 const rawKey = process.env.TOTP_SECRET_ENCRYPTION_KEY;
+const fallbackDatabaseUrl = "postgres://unused:unused@localhost:5432/unused";
+const fallbackEncryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
 describe.skipIf(!databaseUrl || !privilegedDatabaseUrl || !rawKey)("API integration", () => {
-  const encryptionKey = readTotpEncryptionKey(rawKey);
+  const encryptionKey = readTotpEncryptionKey(rawKey ?? fallbackEncryptionKey);
   const server = buildServer({
-    databaseUrl: databaseUrl!,
-    privilegedDatabaseUrl: privilegedDatabaseUrl!,
+    databaseUrl: databaseUrl ?? fallbackDatabaseUrl,
+    privilegedDatabaseUrl: privilegedDatabaseUrl ?? fallbackDatabaseUrl,
     encryptionKey,
     logger: false
   });
 
-  const privilegedDb = createPrivilegedDatabaseClient(privilegedDatabaseUrl!);
-  const scopedDb = createScopedDatabaseClient(databaseUrl!);
+  const privilegedDb = createPrivilegedDatabaseClient(privilegedDatabaseUrl ?? fallbackDatabaseUrl);
+  const scopedDb = createScopedDatabaseClient(databaseUrl ?? fallbackDatabaseUrl);
 
   let tenantId: string;
   let totpSecret: string;
@@ -29,7 +31,12 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl || !rawKey)("API integrat
     await server.ready();
 
     const slug = `test-api-${randomBytes(4).toString("hex")}`;
-    const enrollment = await provisionTenant(privilegedDb, { slug, name: "API Test", encryptionKey, keyId: "default" });
+    const enrollment = await provisionTenant(privilegedDb, {
+      slug,
+      name: "API Test",
+      encryptionKey,
+      keyId: "default"
+    });
     tenantId = enrollment.tenantId;
     totpSecret = enrollment.totpSecret;
   });
@@ -59,7 +66,7 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl || !rawKey)("API integrat
       const res = await server.inject({
         method: "POST",
         url: "/auth/login",
-        payload: { tenantSlug: (await getTenantSlug(privilegedDb, tenantId)), code: "000000" }
+        payload: { tenantSlug: await getTenantSlug(privilegedDb, tenantId), code: "000000" }
       });
       expect(res.statusCode).toBe(401);
     });

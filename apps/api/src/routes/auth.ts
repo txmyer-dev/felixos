@@ -2,9 +2,8 @@ import { authenticateRecoveryCode, authenticateTotp, serializeSessionCookie } fr
 import { tenants } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
-import fp from "fastify-plugin";
 
-export const authRoutes: FastifyPluginAsync = fp(async (fastify) => {
+export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: { tenantSlug?: string; code?: string; recoveryCode?: string };
   }>("/login", async (request, reply) => {
@@ -41,9 +40,10 @@ export const authRoutes: FastifyPluginAsync = fp(async (fastify) => {
       }
 
       if (!code) {
-        return reply
-          .status(400)
-          .send({ ok: false, error: { code: "bad_request", message: "code or recoveryCode is required" } });
+        return reply.status(400).send({
+          ok: false,
+          error: { code: "bad_request", message: "code or recoveryCode is required" }
+        });
       }
 
       const result = await authenticateTotp(request.server.scopedDb, {
@@ -62,7 +62,7 @@ export const authRoutes: FastifyPluginAsync = fp(async (fastify) => {
         .send({ ok: false, error: { code: "unauthorized", message: "Authentication failed" } });
     }
   });
-});
+};
 
 function toSessionView(result: {
   session: { id: string; tenantId: string; createdAt: Date; expiresAt: Date };

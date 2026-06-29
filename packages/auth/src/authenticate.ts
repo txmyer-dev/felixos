@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, and, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { ScopedDatabaseClient } from "@felixos/db";
 import { recoveryCodes, sessions, tenantTotpSecrets, totpReplayGuards } from "@felixos/db";
@@ -72,9 +72,9 @@ export async function authenticateRecoveryCode(
   return runWithTenantContext(input.tenantId, () =>
     client.transaction(async (tx) => {
       const codeHash = hashRecoveryCode(input.tenantId, input.recoveryCode);
-      const [codeRow] = await tx
-        .select()
-        .from(recoveryCodes)
+      const [consumedCode] = await tx
+        .update(recoveryCodes)
+        .set({ consumedAt: input.now ?? new Date() })
         .where(
           and(
             eq(recoveryCodes.tenantId, input.tenantId),
@@ -82,16 +82,14 @@ export async function authenticateRecoveryCode(
             isNull(recoveryCodes.consumedAt)
           )
         )
-        .limit(1);
+        .returning({ codeHash: recoveryCodes.codeHash });
 
-      if (!codeRow || !verifyRecoveryCode(input.tenantId, input.recoveryCode, codeRow.codeHash)) {
+      if (
+        !consumedCode ||
+        !verifyRecoveryCode(input.tenantId, input.recoveryCode, consumedCode.codeHash)
+      ) {
         throw new Error("Invalid recovery code");
       }
-
-      await tx
-        .update(recoveryCodes)
-        .set({ consumedAt: input.now ?? new Date() })
-        .where(eq(recoveryCodes.id, codeRow.id));
 
       const session = createSession(input.tenantId, input.now ? { now: input.now } : {});
       await tx.insert(sessions).values({
