@@ -16,11 +16,31 @@ The current foundation plan is intentionally horizontal. Do not turn a unit into
 ## Current Stack
 
 - Package manager: `pnpm`.
+- Node runtime: 22 LTS, pinned by `.nvmrc` and `package.json` `engines.node`.
 - Build system: Turborepo.
 - Language: TypeScript end to end.
 - Apps: `apps/web`, `apps/api`, `apps/cli`.
 - Packages: `packages/shared-types`, `packages/db`, `packages/auth`.
 - Planned runtime: Next.js web, Fastify API, Drizzle/Postgres 18 + pgvector, passwordless TOTP auth, Postgres RLS.
+
+## Workspace Conventions
+
+These wiring decisions are locked. Every agent follows them identically — do not introduce a competing pattern.
+
+### Module resolution: internal packages consume source
+
+Internal packages (`packages/shared-types`, `packages/db`, `packages/auth`) are private and never published. Consumers import their TypeScript **source**, not a built `dist`:
+
+- `@felixos/*` aliases and each package's `package.json` `exports`/`main`/`types` both resolve to `src` (e.g. `src/index.ts`). Internal libs have no `dist` build.
+- Consumers transpile: `apps/web` (Next.js) via `transpilePackages: ['@felixos/*']`; `apps/api` and `apps/cli` via `tsx` in dev and a bundler (tsup/esbuild) for prod; tests via Vitest reading TS directly.
+- Typecheck with `tsc --noEmit`. Never rely on a generated `dist` from an internal package.
+- Do **not** reintroduce the split where typecheck resolves to `src` but runtime resolves to `dist` — typecheck and runtime must resolve to the same files. If a package ever needs to be published or extracted (e.g. for the productized version), convert it to TS project references (`composite` + `references`) at that point, not before.
+
+### Linting: ESLint 10 + flat config
+
+- ESLint 10 (`eslint` ^10) with **flat config** (`eslint.config.js`) — not the legacy `.eslintrc`. `typescript-eslint` supplies the TS rules.
+- One root flat config shared across the workspace; packages do not each define their own lint setup.
+- Keep `@typescript-eslint/consistent-type-imports` (it pairs with `isolatedModules`).
 
 ## Standard Commands
 
