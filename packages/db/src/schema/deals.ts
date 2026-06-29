@@ -1,4 +1,13 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid
+} from "drizzle-orm/pg-core";
 
 import { entities } from "./entities.js";
 import { tenants } from "./tenants.js";
@@ -12,9 +21,7 @@ export const deals = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id").notNull(),
     name: text("name").notNull(),
     stage: dealStageEnum("stage").notNull().default("new"),
     valueCents: integer("value_cents"),
@@ -23,7 +30,12 @@ export const deals = pgTable(
   },
   (table) => [
     index("deals_tenant_id_idx").on(table.tenantId),
-    index("deals_account_id_idx").on(table.accountId)
+    index("deals_account_id_idx").on(table.accountId),
+    foreignKey({
+      columns: [table.tenantId, table.accountId],
+      foreignColumns: [entities.tenantId, entities.id],
+      name: "deals_tenant_account_fk"
+    }).onDelete("cascade")
   ]
 );
 
