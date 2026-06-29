@@ -4,9 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "echo \"No tests yet\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@felixos/auth": "workspace:*",
+    "@felixos/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2"
   }
 }
