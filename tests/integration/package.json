@@ -1,0 +1,22 @@
+{
+  "name": "@felixos/integration-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@felixos/auth": "workspace:*",
+    "@felixos/db": "workspace:*",
+    "@felixos/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.3.3",
+    "fastify-plugin": "^5.0.1",
+    "tsx": "^4.20.3",
+    "vitest": "^4.1.9"
+  }
+}
