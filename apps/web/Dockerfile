@@ -10,9 +10,11 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/db/package.json ./packages/db/
 COPY packages/auth/package.json ./packages/auth/
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-web,target=/pnpm/store pnpm install --frozen-lockfile
 
 FROM deps AS build
+ARG FELIXOS_API_ORIGIN=http://api:3001
+ENV FELIXOS_API_ORIGIN=$FELIXOS_API_ORIGIN
 COPY tsconfig.base.json ./
 COPY packages/shared-types/src ./packages/shared-types/src
 COPY packages/db/src ./packages/db/src
@@ -30,6 +32,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./.next/static
+COPY --from=build /app/apps/web/public ./public
 
 EXPOSE 3000
 CMD ["node", "server.js"]

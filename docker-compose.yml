@@ -18,40 +18,22 @@ services:
     image: pgvector/pgvector:pg18
     volumes:
       - ./packages/db/migrations:/migrations:ro
+      - ./infra/migrate.sh:/migrate.sh:ro
     environment:
-      # Superuser credentials — used by this container only to run migrations and
-      # create the login-capable app/privileged users.
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-felixos}
-      # Application connection strings whose username+password are extracted
-      # to provision the login users that the api service will connect with.
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      DATABASE_PRIVILEGED_URL: ${DATABASE_PRIVILEGED_URL:?DATABASE_PRIVILEGED_URL is required}
+      # Explicit credentials for the two login users to provision.
+      # Kept separate from DATABASE_URL so no URL parsing is needed.
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
+      APP_DB_PASS: ${APP_DB_PASS:?APP_DB_PASS is required}
+      PRIV_DB_USER: ${PRIV_DB_USER:?PRIV_DB_USER is required}
+      PRIV_DB_PASS: ${PRIV_DB_PASS:?PRIV_DB_PASS is required}
     depends_on:
       postgres:
         condition: service_healthy
-    # 1. Apply all migrations as the Postgres superuser.
-    # 2. Extract the login credentials from the application URLs and CREATE the
-    #    login-capable users that INHERIT from the NOLOGIN group roles created by
-    #    the migrations.  The group roles (felixos_app_role / felixos_privileged_role)
-    #    are NOLOGIN by design; direct connections must go through login users.
-    command: >
-      sh -c "
-        SUPER_URL=\"postgresql://$$POSTGRES_USER:$$POSTGRES_PASSWORD@postgres:5432/$$POSTGRES_DB\" &&
-        for f in /migrations/*.sql; do
-          echo \"Applying $$f\" &&
-          psql \"$$SUPER_URL\" -f \"$$f\" || exit 1;
-        done &&
-        APP_USER=$$(echo \"$$DATABASE_URL\" | sed -E 's|postgresql://([^:@]+).*|\1|') &&
-        APP_PASS=$$(echo \"$$DATABASE_URL\" | sed -E 's|postgresql://[^:]+:([^@]+)@.*|\1|') &&
-        PRIV_USER=$$(echo \"$$DATABASE_PRIVILEGED_URL\" | sed -E 's|postgresql://([^:@]+).*|\1|') &&
-        PRIV_PASS=$$(echo \"$$DATABASE_PRIVILEGED_URL\" | sed -E 's|postgresql://[^:]+:([^@]+)@.*|\1|') &&
-        psql \"$$SUPER_URL\" -c \"DO \\\$\\\$BEGIN CREATE USER \\\"$$APP_USER\\\" WITH LOGIN PASSWORD '$$APP_PASS' IN ROLE felixos_app_role; EXCEPTION WHEN duplicate_object THEN ALTER USER \\\"$$APP_USER\\\" WITH PASSWORD '$$APP_PASS'; END\\\$\\\$\" &&
-        psql \"$$SUPER_URL\" -c \"DO \\\$\\\$BEGIN CREATE USER \\\"$$PRIV_USER\\\" WITH LOGIN PASSWORD '$$PRIV_PASS' IN ROLE felixos_privileged_role; EXCEPTION WHEN duplicate_object THEN ALTER USER \\\"$$PRIV_USER\\\" WITH PASSWORD '$$PRIV_PASS'; END\\\$\\\$\" &&
-        echo 'Bootstrap complete'
-      "
-    restart: on-failure
+    command: ["sh", "/migrate.sh"]
+    restart: "no"
 
   api:
     build:
@@ -78,10 +60,13 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # next.config.ts captures this at build time to bake rewrites destinations.
+        FELIXOS_API_ORIGIN: ${FELIXOS_API_ORIGIN:-http://api:3001}
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3001}
+      FELIXOS_API_ORIGIN: ${FELIXOS_API_ORIGIN:-http://api:3001}
     depends_on:
       migrate:
         condition: service_completed_successfully
