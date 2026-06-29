@@ -1,4 +1,4 @@
-import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { foreignKey, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { contacts } from "./contacts.js";
 import { entities } from "./entities.js";
@@ -20,10 +20,8 @@ export const interactions = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
-    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    accountId: uuid("account_id").notNull(),
+    contactId: uuid("contact_id"),
     kind: interactionKindEnum("kind").notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     summary: text("summary").notNull(),
@@ -33,7 +31,17 @@ export const interactions = pgTable(
   (table) => [
     index("interactions_tenant_id_idx").on(table.tenantId),
     index("interactions_account_id_idx").on(table.accountId),
-    index("interactions_contact_id_idx").on(table.contactId)
+    index("interactions_contact_id_idx").on(table.contactId),
+    foreignKey({
+      columns: [table.tenantId, table.accountId],
+      foreignColumns: [entities.tenantId, entities.id],
+      name: "interactions_tenant_account_fk"
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.tenantId, table.contactId],
+      foreignColumns: [contacts.tenantId, contacts.id],
+      name: "interactions_tenant_contact_fk"
+    }).onDelete("set null")
   ]
 );
 

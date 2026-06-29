@@ -28,6 +28,18 @@ describe("foundation schema migration", () => {
     expect(migration).toContain("code_hash text NOT NULL");
   });
 
+  test("defines RLS policies and tenant-aware child constraints", async () => {
+    const migrationUrl = new URL("../../migrations/0001_rls_policies.sql", import.meta.url);
+    const migration = await readFile(migrationUrl, "utf8");
+
+    expect(migration).toContain("CREATE ROLE felixos_app_role NOLOGIN NOBYPASSRLS");
+    expect(migration).toContain("CREATE ROLE felixos_privileged_role NOLOGIN BYPASSRLS");
+    expect(migration).toContain("FORCE ROW LEVEL SECURITY");
+    expect(migration).toContain("current_setting('app.current_tenant', true)");
+    expect(migration).toContain("FOREIGN KEY (tenant_id, account_id)");
+    expect(migration).toContain("FOREIGN KEY (tenant_id, contact_id)");
+  });
+
   test.skipIf(!process.env.TEST_DATABASE_URL)(
     "applies to Postgres with pgvector and enforces required tenant_id columns",
     async () => {
