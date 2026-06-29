@@ -1,41 +1,115 @@
 import { provisionTenant, readTotpEncryptionKey } from "@felixos/auth";
-import { createPrivilegedDatabaseClient, createScopedDatabaseClient } from "@felixos/db";
-import { randomBytes } from "node:crypto";
+import {
+  createPrivilegedDatabaseClient,
+  createScopedDatabaseClient,
+  createSqlClient,
+  type DatabaseSql
+} from "@felixos/db";
+import { randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildServer } from "./server.js";
 
-const databaseUrl = process.env.DATABASE_URL;
-const privilegedDatabaseUrl = process.env.DATABASE_PRIVILEGED_URL;
-const rawKey = process.env.TOTP_SECRET_ENCRYPTION_KEY;
+const databaseUrl = process.env.DATABASE_URL ?? process.env.TEST_DATABASE_URL;
+const privilegedDatabaseUrl = process.env.DATABASE_PRIVILEGED_URL ?? process.env.TEST_DATABASE_URL;
+const rawKey =
+  process.env.TOTP_SECRET_ENCRYPTION_KEY ?? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const migrationUrls = [
+  new URL("../../../packages/db/migrations/0000_foundation_schema.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0001_rls_policies.sql", import.meta.url)
+];
+const appRoleName = "felixos_app_role";
 
-describe.skipIf(!databaseUrl || !privilegedDatabaseUrl || !rawKey)("API integration", () => {
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function withSearchPath(databaseUrl: string, schemaName: string): string {
+  const url = new URL(databaseUrl);
+  url.searchParams.set("options", `-c search_path=${schemaName},public`);
+  return url.toString();
+}
+
+function withCredentials(databaseUrl: string, username: string, password: string): string {
+  const url = new URL(databaseUrl);
+  url.username = username;
+  url.password = password;
+  return url.toString();
+}
+
+async function applyMigrations(sql: DatabaseSql, schemaName: string): Promise<void> {
+  await sql.unsafe(`CREATE SCHEMA ${quoteIdentifier(schemaName)}`);
+  await sql.unsafe(`SET search_path TO ${quoteIdentifier(schemaName)}, public`);
+
+  for (const migrationUrl of migrationUrls) {
+    await sql.unsafe(await readFile(migrationUrl, "utf8"));
+  }
+}
+
+describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("API integration", () => {
   const encryptionKey = readTotpEncryptionKey(rawKey);
-  const server = buildServer({
-    databaseUrl: databaseUrl!,
-    privilegedDatabaseUrl: privilegedDatabaseUrl!,
-    encryptionKey,
-    logger: false
-  });
-
-  const privilegedDb = createPrivilegedDatabaseClient(privilegedDatabaseUrl!);
-  const scopedDb = createScopedDatabaseClient(databaseUrl!);
+  const schemaName = `felixos_u6_${randomUUID().replaceAll("-", "_")}`;
+  const scopedRoleName = `felixos_u6_app_${randomUUID().replaceAll("-", "_")}`;
+  const scopedRolePassword = randomBytes(18).toString("base64url");
+  let server: ReturnType<typeof buildServer>;
+  let privilegedDb: ReturnType<typeof createPrivilegedDatabaseClient>;
+  let scopedDb: ReturnType<typeof createScopedDatabaseClient>;
 
   let tenantId: string;
   let totpSecret: string;
   let sessionCookie: string;
 
   beforeAll(async () => {
+    const setupSql = createSqlClient(privilegedDatabaseUrl!, {
+      max: 1,
+      onnotice: () => undefined
+    });
+    await applyMigrations(setupSql, schemaName);
+    await setupSql.unsafe(`
+      CREATE ROLE ${quoteIdentifier(scopedRoleName)}
+      LOGIN PASSWORD '${scopedRolePassword.replaceAll("'", "''")}'
+      IN ROLE ${quoteIdentifier(appRoleName)}
+      NOBYPASSRLS
+    `);
+    await setupSql.end({ timeout: 5 });
+
+    const privilegedSchemaUrl = withSearchPath(privilegedDatabaseUrl!, schemaName);
+    const scopedSchemaUrl = withSearchPath(
+      withCredentials(databaseUrl!, scopedRoleName, scopedRolePassword),
+      schemaName
+    );
+
+    server = buildServer({
+      databaseUrl: scopedSchemaUrl,
+      privilegedDatabaseUrl: privilegedSchemaUrl,
+      encryptionKey,
+      logger: false
+    });
+    privilegedDb = createPrivilegedDatabaseClient(privilegedSchemaUrl);
+    scopedDb = createScopedDatabaseClient(scopedSchemaUrl);
     await server.ready();
 
     const slug = `test-api-${randomBytes(4).toString("hex")}`;
-    const enrollment = await provisionTenant(privilegedDb, { slug, name: "API Test", encryptionKey, keyId: "default" });
+    const enrollment = await provisionTenant(privilegedDb, {
+      slug,
+      name: "API Test",
+      encryptionKey,
+      keyId: "default"
+    });
     tenantId = enrollment.tenantId;
     totpSecret = enrollment.totpSecret;
   });
 
   afterAll(async () => {
     await server.close();
+    const cleanupSql = createSqlClient(privilegedDatabaseUrl!, {
+      max: 1,
+      onnotice: () => undefined
+    });
+    await cleanupSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
+    await cleanupSql.unsafe(`DROP ROLE IF EXISTS ${quoteIdentifier(scopedRoleName)}`);
+    await cleanupSql.end({ timeout: 5 });
     await Promise.all([privilegedDb.end(), scopedDb.end()]);
   });
 
@@ -59,7 +133,7 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl || !rawKey)("API integrat
       const res = await server.inject({
         method: "POST",
         url: "/auth/login",
-        payload: { tenantSlug: (await getTenantSlug(privilegedDb, tenantId)), code: "000000" }
+        payload: { tenantSlug: await getTenantSlug(privilegedDb, tenantId), code: "000000" }
       });
       expect(res.statusCode).toBe(401);
     });
