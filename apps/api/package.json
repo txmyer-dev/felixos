@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "vitest run --sequence.concurrent=false",
+    "test": "vitest run src/lib/llm.test.ts && vitest run src/api.integration.test.ts && vitest run src/knowledge.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

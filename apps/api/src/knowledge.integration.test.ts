@@ -242,16 +242,57 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Knowledge API integrati
     ).toBe(200);
     expect(llm.distillCalls).toBe(before + 1);
 
-    expect(
-      (
-        await server.inject({
-          method: "POST",
-          url: `/knowledge/distill/${sourceId}?force=true`,
-          headers: { cookie: tenantACookie }
-        })
-      ).statusCode
-    ).toBe(201);
+    const firstForceRes = await server.inject({
+      method: "POST",
+      url: `/knowledge/distill/${sourceId}?force=true`,
+      headers: { cookie: tenantACookie }
+    });
+    expect(firstForceRes.statusCode).toBe(201);
+    const firstForceItemId = firstForceRes.json().data[0].id;
     expect(llm.distillCalls).toBe(before + 2);
+
+    const acceptFirstForceRes = await server.inject({
+      method: "PATCH",
+      url: `/knowledge/items/${firstForceItemId}`,
+      headers: { cookie: tenantACookie },
+      payload: { status: "accepted" }
+    });
+    expect(acceptFirstForceRes.statusCode).toBe(200);
+
+    const secondForceRes = await server.inject({
+      method: "POST",
+      url: `/knowledge/distill/${sourceId}?force=true`,
+      headers: { cookie: tenantACookie }
+    });
+    expect(secondForceRes.statusCode).toBe(201);
+    const secondForceItemId = secondForceRes.json().data[0].id;
+    expect(secondForceItemId).not.toBe(firstForceItemId);
+    expect(llm.distillCalls).toBe(before + 3);
+
+    const stalePatchRes = await server.inject({
+      method: "PATCH",
+      url: `/knowledge/items/${firstForceItemId}`,
+      headers: { cookie: tenantACookie },
+      payload: { status: "rejected" }
+    });
+    expect(stalePatchRes.statusCode).toBe(404);
+
+    const acceptSecondForceRes = await server.inject({
+      method: "PATCH",
+      url: `/knowledge/items/${secondForceItemId}`,
+      headers: { cookie: tenantACookie },
+      payload: { status: "accepted" }
+    });
+    expect(acceptSecondForceRes.statusCode).toBe(200);
+
+    const searchRes = await server.inject({
+      method: "GET",
+      url: "/knowledge/search?q=stub&globalOnly=true",
+      headers: { cookie: tenantACookie }
+    });
+    const searchIds = searchRes.json().data.map((item: { id: string }) => item.id);
+    expect(searchIds).toContain(secondForceItemId);
+    expect(searchIds).not.toContain(firstForceItemId);
   });
 
   it("filters rejected items and returns corrected text", async () => {
