@@ -84,10 +84,9 @@ export function createOpenAiLlmShim(opts: {
           temperature: 0
         });
       } catch (error) {
-        throw new LlmError(
-          error instanceof Error ? error.message : "Distillation request failed",
-          { cause: error }
-        );
+        throw new LlmError(error instanceof Error ? error.message : "Distillation request failed", {
+          cause: error
+        });
       }
 
       return parseDistillationCompletion(completion.choices?.[0]?.message?.content);
@@ -100,10 +99,9 @@ export function createOpenAiLlmShim(opts: {
           input: text
         });
       } catch (error) {
-        throw new LlmError(
-          error instanceof Error ? error.message : "Embedding request failed",
-          { cause: error }
-        );
+        throw new LlmError(error instanceof Error ? error.message : "Embedding request failed", {
+          cause: error
+        });
       }
       const embedding = response.data?.[0]?.embedding;
       if (!embedding) {
@@ -121,9 +119,7 @@ export function parseDistillationCompletion(content: string | null | undefined):
   try {
     parsed = JSON.parse(content);
   } catch {
-    throw new LlmError(
-      `Distillation returned unparseable response: ${content.slice(0, 200)}`
-    );
+    throw new LlmError(`Distillation returned unparseable response: ${content.slice(0, 200)}`);
   }
 
   if (!Array.isArray(parsed)) return [];

@@ -10,7 +10,13 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 
 import { searchKnowledge } from "../lib/knowledge-search.js";
-import { sendBadRequest, sendConflict, sendError, sendNotFound, sendSuccess } from "../lib/responses.js";
+import {
+  sendBadRequest,
+  sendConflict,
+  sendError,
+  sendNotFound,
+  sendSuccess
+} from "../lib/responses.js";
 import { createSetGuard } from "../lib/validation.js";
 import { createKnowledgeRetrievalTool } from "@felixos/agent/tools/knowledge-retrieval.js";
 import { withRequestTenant } from "./context.js";
