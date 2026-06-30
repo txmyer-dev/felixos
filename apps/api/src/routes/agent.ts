@@ -1,13 +1,14 @@
 import {
-  resolveInferenceProvider,
-  runAgent,
-  defaultRegistry,
   createDbTrustLadderStore,
-  createSkillTool
+  createN8nWorkflowSkills,
+  createSkillTool,
+  defaultRegistry,
+  resolveInferenceProvider,
+  runAgent
 } from "@felixos/agent";
 import { tenantSkillRungs, pendingActions } from "@felixos/db";
 import { and, eq } from "drizzle-orm";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 
 import { searchKnowledge } from "../lib/knowledge-search.js";
 import {
@@ -18,8 +19,8 @@ import {
   sendSuccess
 } from "../lib/responses.js";
 import { createSetGuard } from "../lib/validation.js";
-import { createKnowledgeRetrievalTool } from "@felixos/agent/tools/knowledge-retrieval.js";
 import { withRequestTenant } from "./context.js";
+import { createKnowledgeRetrievalTool } from "@felixos/agent/tools/knowledge-retrieval.js";
 import type { TrustRung } from "@felixos/shared-types";
 
 const isValidRung = createSetGuard<TrustRung>(
@@ -68,24 +69,29 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     const skillCtx = {
       tenantId: request.tenantId,
       scopedDb: request.server.scopedDb,
-      provider
+      provider,
+      encryptionKey: request.server.encryptionKey
     };
+    const n8nSkills = await createN8nWorkflowSkills({
+      tenantId: request.tenantId,
+      scopedDb: request.server.scopedDb,
+      n8nClient: request.server.n8n,
+      fetchImpl: request.server.n8nWebhookFetch
+    });
 
-    const skillTools = defaultRegistry
-      .listDescriptors()
-      .map((d) => defaultRegistry.get(d.name)!)
-      .map((skill) =>
-        createSkillTool({
-          skill,
-          ctx: skillCtx,
-          store,
-          onOutcome: (outcome) => {
-            if (outcome.kind === "pending" && outcome.id) {
-              pendingActionIds.push(outcome.id);
-            }
+    const staticSkills = defaultRegistry.listDescriptors().map((d) => defaultRegistry.get(d.name)!);
+    const skillTools = [...staticSkills, ...n8nSkills].map((skill) =>
+      createSkillTool({
+        skill,
+        ctx: skillCtx,
+        store,
+        onOutcome: (outcome) => {
+          if (outcome.kind === "pending" && outcome.id) {
+            pendingActionIds.push(outcome.id);
           }
-        })
-      );
+        }
+      })
+    );
 
     let result;
     try {
@@ -135,11 +141,12 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       return sendConflict(reply, `Action already ${row.status}`);
     }
 
-    const skill = defaultRegistry.get(row.skillName);
+    const skill = await findSkillForPendingAction(row.skillName, request);
     const skillCtx = {
       tenantId: request.tenantId,
       scopedDb: request.server.scopedDb,
-      provider: {}
+      provider: {},
+      encryptionKey: request.server.encryptionKey
     };
 
     if (skill?.afterApproval) {
@@ -223,6 +230,19 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 };
+
+async function findSkillForPendingAction(skillName: string, request: FastifyRequest) {
+  const staticSkill = defaultRegistry.get(skillName);
+  if (staticSkill) return staticSkill;
+
+  const n8nSkills = await createN8nWorkflowSkills({
+    tenantId: request.tenantId,
+    scopedDb: request.server.scopedDb,
+    n8nClient: request.server.n8n,
+    fetchImpl: request.server.n8nWebhookFetch
+  });
+  return n8nSkills.find((skill) => skill.descriptor.name === skillName);
+}
 
 function toPendingActionView(row: typeof pendingActions.$inferSelect) {
   return {

@@ -25,5 +25,7 @@ export { DocNoteCaptureSkill } from "./skills/doc-note-capture.js";
 export { YouTubeCaptureSkill, ExternalDependencyError } from "./skills/youtube-capture.js";
 export { DraftEmailSkill } from "./skills/draft-email.js";
 export { CreateTaskSkill } from "./skills/create-task.js";
+export { createN8nWorkflowSkills } from "./skills/n8n-registry.js";
+export { createN8nWorkflowSkill } from "./skills/n8n-workflow.js";
 export { createDbTrustLadderStore } from "./trust-ladder-store.js";
 export { createSkillTool } from "./tools/skill-tool.js";

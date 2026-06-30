@@ -25,6 +25,8 @@
       "@felixos/agent/*": ["packages/agent/src/*"],
       "@felixos/db": ["packages/db/src/index.ts"],
       "@felixos/db/*": ["packages/db/src/*"],
+      "@felixos/integrations": ["packages/integrations/src/index.ts"],
+      "@felixos/integrations/*": ["packages/integrations/src/*"],
       "@felixos/skills": ["packages/skills/src/index.ts"],
       "@felixos/skills/*": ["packages/skills/src/*"],
       "@felixos/shared-types": ["packages/shared-types/src/index.ts"],

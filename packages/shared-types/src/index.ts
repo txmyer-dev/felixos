@@ -25,6 +25,12 @@ export type {
   RawSourceView
 } from "./knowledge.js";
 export type {
+  N8nExecutionView,
+  N8nNeedsAttentionItem,
+  N8nWorkflowView,
+  TenantN8nSkillView
+} from "./n8n.js";
+export type {
   AuthCodeKind,
   AuthenticatedSession,
   LoginRequest,

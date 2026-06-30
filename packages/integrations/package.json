@@ -1,5 +1,5 @@
 {
-  "name": "@felixos/agent",
+  "name": "@felixos/integrations",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
-    },
-    "./tools/knowledge-retrieval.js": {
-      "types": "./src/tools/knowledge-retrieval.ts",
-      "default": "./src/tools/knowledge-retrieval.ts"
     }
   },
   "scripts": {
@@ -20,15 +16,6 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@felixos/auth": "workspace:*",
-    "@felixos/db": "workspace:*",
-    "@felixos/integrations": "workspace:*",
-    "@felixos/shared-types": "workspace:*",
-    "@felixos/skills": "workspace:*",
-    "@openai/agents": "^0.12.0",
-    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

@@ -1,4 +1,5 @@
 import { createPrivilegedDatabaseClient, createScopedDatabaseClient } from "@felixos/db";
+import { N8nUnavailableError, createEnvN8nClient } from "@felixos/integrations";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import fp from "fastify-plugin";
@@ -14,8 +15,11 @@ import { dealRoutes } from "./routes/deals.js";
 import { entityRoutes } from "./routes/entities.js";
 import { interactionRoutes } from "./routes/interactions.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
+import { n8nRoutes } from "./routes/n8n.js";
+import { n8nSkillRoutes } from "./routes/n8n-skills.js";
 
 import type { PrivilegedDatabaseClient, ScopedDatabaseClient } from "@felixos/db";
+import type { N8nClient } from "@felixos/integrations";
 import type { LlmShim } from "./lib/llm.js";
 
 type DatabaseClientOptions = Parameters<typeof createScopedDatabaseClient>[1];
@@ -25,6 +29,8 @@ declare module "fastify" {
     privilegedDb: PrivilegedDatabaseClient;
     scopedDb: ScopedDatabaseClient;
     llm: LlmShim;
+    n8n: N8nClient;
+    n8nWebhookFetch?: typeof fetch;
     encryptionKey: Buffer;
     keyId: string;
   }
@@ -38,6 +44,8 @@ export function buildServer(opts: {
   databaseOptions?: DatabaseClientOptions;
   privilegedDatabaseOptions?: DatabaseClientOptions;
   llm?: LlmShim;
+  n8n?: N8nClient;
+  n8nWebhookFetch?: typeof fetch;
   logger?: boolean;
 }) {
   const fastify = Fastify({ logger: opts.logger ?? false });
@@ -48,12 +56,17 @@ export function buildServer(opts: {
   );
   const scopedDb = createScopedDatabaseClient(opts.databaseUrl, opts.databaseOptions);
   const llm = opts.llm ?? createEnvLlmShim();
+  const n8n = opts.n8n ?? createOptionalEnvN8nClient();
 
   fastify.register(
     fp(async (f) => {
       f.decorate("privilegedDb", privilegedDb);
       f.decorate("scopedDb", scopedDb);
       f.decorate("llm", llm);
+      f.decorate("n8n", n8n);
+      if (opts.n8nWebhookFetch) {
+        f.decorate("n8nWebhookFetch", opts.n8nWebhookFetch);
+      }
       f.decorate("encryptionKey", opts.encryptionKey);
       f.decorate("keyId", opts.keyId ?? "default");
     })
@@ -76,10 +89,39 @@ export function buildServer(opts: {
   fastify.register(dealRoutes, { prefix: "/deals" });
   fastify.register(interactionRoutes, { prefix: "/interactions" });
   fastify.register(knowledgeRoutes, { prefix: "/knowledge" });
+  fastify.register(n8nRoutes, { prefix: "/n8n" });
+  fastify.register(n8nSkillRoutes, { prefix: "/n8n/skills" });
 
   fastify.addHook("onClose", async () => {
     await Promise.all([privilegedDb.end(), scopedDb.end()]);
   });
 
   return fastify;
+}
+
+function createOptionalEnvN8nClient(): N8nClient {
+  try {
+    return createEnvN8nClient();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "n8n is not configured";
+    return createUnavailableN8nClient(message);
+  }
+}
+
+function createUnavailableN8nClient(message: string): N8nClient {
+  async function unavailable(): Promise<never> {
+    throw new N8nUnavailableError(message);
+  }
+
+  return {
+    baseUrl: process.env.N8N_BASE_URL ?? "",
+    listWorkflows: unavailable,
+    getWorkflow: unavailable,
+    activateWorkflow: unavailable,
+    deactivateWorkflow: unavailable,
+    listExecutions: unavailable,
+    getExecution: unavailable,
+    retryExecution: unavailable,
+    stopExecution: unavailable
+  };
 }
