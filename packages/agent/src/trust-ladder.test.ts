@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getEffectiveRung, invokeThroughTrustLadder, type TrustLadderStore } from "./trust-ladder.js";
+import {
+  getEffectiveRung,
+  invokeThroughTrustLadder,
+  type TrustLadderStore
+} from "./trust-ladder.js";
 
 import type { Skill, SkillContext } from "@felixos/skills";
 
@@ -24,13 +28,13 @@ describe("trust ladder", () => {
     const skill = makeSkill({ defaultRung: "suggest", execute });
     const store = makeStore();
 
-    await expect(invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)).resolves.toEqual(
-      {
-        kind: "suggestion",
-        skillName: "draft-email",
-        payload: { subject: "hello" }
-      }
-    );
+    await expect(
+      invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)
+    ).resolves.toEqual({
+      kind: "suggestion",
+      skillName: "draft-email",
+      payload: { subject: "hello" }
+    });
     expect(execute).not.toHaveBeenCalled();
     expect(store.insertions).toEqual([]);
   });
@@ -40,13 +44,13 @@ describe("trust ladder", () => {
     const skill = makeSkill({ defaultRung: "draft-and-wait", execute });
     const store = makeStore({ pendingId: "pending-1" });
 
-    await expect(invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)).resolves.toEqual(
-      {
-        kind: "pending",
-        id: "pending-1",
-        skillName: "draft-email"
-      }
-    );
+    await expect(
+      invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)
+    ).resolves.toEqual({
+      kind: "pending",
+      id: "pending-1",
+      skillName: "draft-email"
+    });
     expect(execute).not.toHaveBeenCalled();
     expect(store.insertions).toEqual([
       {
@@ -64,13 +68,13 @@ describe("trust ladder", () => {
     const skill = makeSkill({ defaultRung: "act-and-log", execute });
     const store = makeStore({ pendingId: "executed-1" });
 
-    await expect(invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)).resolves.toEqual(
-      {
-        kind: "executed",
-        skillName: "draft-email",
-        result: { draft: "done" }
-      }
-    );
+    await expect(
+      invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)
+    ).resolves.toEqual({
+      kind: "executed",
+      skillName: "draft-email",
+      result: { draft: "done" }
+    });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(store.insertions).toEqual([
       {
@@ -88,13 +92,13 @@ describe("trust ladder", () => {
     const skill = makeSkill({ defaultRung: "full-auto", execute });
     const store = makeStore();
 
-    await expect(invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)).resolves.toEqual(
-      {
-        kind: "executed",
-        skillName: "draft-email",
-        result: { sent: true }
-      }
-    );
+    await expect(
+      invokeThroughTrustLadder(skill, { subject: "hello" }, context, store)
+    ).resolves.toEqual({
+      kind: "executed",
+      skillName: "draft-email",
+      result: { sent: true }
+    });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(store.insertions).toEqual([]);
   });
@@ -125,10 +129,12 @@ function makeSkill(overrides: {
   };
 }
 
-function makeStore(opts: {
-  rung?: Skill["descriptor"]["defaultRung"];
-  pendingId?: string;
-} = {}): TrustLadderStore & {
+function makeStore(
+  opts: {
+    rung?: Skill["descriptor"]["defaultRung"];
+    pendingId?: string;
+  } = {}
+): TrustLadderStore & {
   insertions: Array<{
     tenantId: string;
     skillName: string;
