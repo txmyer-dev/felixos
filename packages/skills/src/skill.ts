@@ -5,6 +5,7 @@ export type SkillContext = {
   tenantId: string;
   scopedDb: ScopedDatabaseClient;
   provider: unknown;
+  encryptionKey?: Buffer;
 };
 
 export type SkillResult<TOutput = unknown> = {

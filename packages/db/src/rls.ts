@@ -17,7 +17,9 @@ export const tenantScopedTables = [
   "distilled_items",
   "tenant_inference_configs",
   "tenant_skill_rungs",
-  "pending_actions"
+  "pending_actions",
+  "tenant_n8n_skills",
+  "n8n_execution_acknowledgments"
 ] as const;
 
 export type TenantScopedTable = (typeof tenantScopedTables)[number];

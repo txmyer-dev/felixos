@@ -24,7 +24,9 @@ const migrationUrls = [
   new URL("../../../packages/db/migrations/0002_knowledge_schema.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0003_knowledge_rls.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0004_agent_schema.sql", import.meta.url),
-  new URL("../../../packages/db/migrations/0005_agent_rls.sql", import.meta.url)
+  new URL("../../../packages/db/migrations/0005_agent_rls.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0006_n8n_schema.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0007_n8n_rls.sql", import.meta.url)
 ];
 const appRoleName = "felixos_app_role";
 

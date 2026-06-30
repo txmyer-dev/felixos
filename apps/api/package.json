@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "vitest run src/lib/llm.test.ts && vitest run src/api.integration.test.ts && vitest run src/knowledge.integration.test.ts",
+    "test": "vitest run src/lib/llm.test.ts && vitest run src/api.integration.test.ts && vitest run src/knowledge.integration.test.ts && vitest run src/n8n.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "@felixos/agent": "workspace:*",
     "@felixos/auth": "workspace:*",
     "@felixos/db": "workspace:*",
+    "@felixos/integrations": "workspace:*",
     "@felixos/shared-types": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.3",
