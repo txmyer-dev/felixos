@@ -60,8 +60,11 @@ describe("runAgent", () => {
       runAgent(
         baseOptions({
           provider: {
+            provider: "openrouter",
             apiKey: "test-key",
             model: "gpt-test",
+            distillationModel: "gpt-test",
+            embeddingModel: "embedding-test",
             supportsTools: false
           },
           tools: [{} as AgentTool]
@@ -75,8 +78,11 @@ function baseOptions(overrides: Partial<AgentRunOptions> = {}): AgentRunOptions 
   return {
     query: "What changed today?",
     provider: {
+      provider: "openai",
       apiKey: "test-key",
       model: "gpt-test",
+      distillationModel: "gpt-test",
+      embeddingModel: "embedding-test",
       baseURL: "https://llm.example.test/v1",
       supportsTools: true
     },

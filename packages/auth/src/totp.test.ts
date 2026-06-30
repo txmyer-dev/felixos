@@ -5,7 +5,9 @@ import { describe, expect, test } from "vitest";
 import { generateRecoveryCodes, verifyRecoveryCode } from "./recovery.js";
 import { createSession, serializeSessionCookie } from "./session.js";
 import {
+  decryptSecret,
   decryptTotpSecret,
+  encryptSecret,
   encryptTotpSecret,
   generateTotpCode,
   generateTotpSecret,
@@ -50,6 +52,15 @@ describe("passwordless auth primitives", () => {
 
     expect(encrypted.ciphertext).not.toContain(secret);
     expect(decryptTotpSecret(encrypted, key)).toBe(secret);
+  });
+
+  test("encrypts generic secrets for non-TOTP credentials", () => {
+    const key = randomBytes(32);
+    const secret = "provider-api-key";
+    const encrypted = encryptSecret(secret, key, "local-test");
+
+    expect(encrypted.ciphertext).not.toContain(secret);
+    expect(decryptSecret(encrypted, key)).toBe(secret);
   });
 
   test("generates high-entropy single-use recovery code hashes", () => {

@@ -20,7 +20,9 @@ const migrationUrls = [
   new URL("../../../packages/db/migrations/0000_foundation_schema.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0001_rls_policies.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0002_knowledge_schema.sql", import.meta.url),
-  new URL("../../../packages/db/migrations/0003_knowledge_rls.sql", import.meta.url)
+  new URL("../../../packages/db/migrations/0003_knowledge_rls.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0004_agent_schema.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0005_agent_rls.sql", import.meta.url)
 ];
 const appRoleName = "felixos_app_role";
 
@@ -216,6 +218,43 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("API integration", () =>
       });
       expect(res.statusCode).toBe(200);
       expect(res.json().data.lifecycleStage).toBe("client");
+    });
+  });
+
+  describe("Agent config routes (authenticated)", () => {
+    it("PUT /agent/config upserts and GET /agent/config masks the key", async () => {
+      const putRes = await server.inject({
+        method: "PUT",
+        url: "/agent/config",
+        headers: { cookie: sessionCookie },
+        payload: {
+          provider: "openrouter",
+          baseUrl: "https://openrouter.example.test/api/v1",
+          apiKey: "secret-api-key",
+          distillationModel: "openrouter/model",
+          embeddingModel: "embedding-model",
+          supportsTools: false
+        }
+      });
+      expect(putRes.statusCode).toBe(200);
+      expect(putRes.json().data).toMatchObject({
+        tenantId,
+        provider: "openrouter",
+        baseUrl: "https://openrouter.example.test/api/v1",
+        distillationModel: "openrouter/model",
+        embeddingModel: "embedding-model",
+        supportsTools: false
+      });
+      expect(putRes.json().data.apiKey).not.toContain("secret-api-key");
+
+      const getRes = await server.inject({
+        method: "GET",
+        url: "/agent/config",
+        headers: { cookie: sessionCookie }
+      });
+      expect(getRes.statusCode).toBe(200);
+      expect(getRes.json().data.apiKey).toBe("configured");
+      expect(getRes.json().data.apiKey).not.toContain("secret-api-key");
     });
   });
 

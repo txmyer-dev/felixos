@@ -4,13 +4,14 @@ import fp from "fastify-plugin";
 
 import { authMiddleware } from "./middleware/auth.js";
 import { tenantMiddleware } from "./middleware/tenant.js";
+import { createEnvLlmShim } from "./lib/llm.js";
+import { agentConfigRoutes } from "./routes/agent-config.js";
 import { authRoutes } from "./routes/auth.js";
 import { contactRoutes } from "./routes/contacts.js";
 import { dealRoutes } from "./routes/deals.js";
 import { entityRoutes } from "./routes/entities.js";
 import { interactionRoutes } from "./routes/interactions.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
-import { createEnvLlmShim } from "./lib/llm.js";
 
 import type { PrivilegedDatabaseClient, ScopedDatabaseClient } from "@felixos/db";
 import type { LlmShim } from "./lib/llm.js";
@@ -62,6 +63,7 @@ export function buildServer(opts: {
   fastify.get("/health", async () => ({ ok: true }));
 
   fastify.register(authRoutes, { prefix: "/auth" });
+  fastify.register(agentConfigRoutes, { prefix: "/agent/config" });
   fastify.register(entityRoutes, { prefix: "/entities" });
   fastify.register(contactRoutes, { prefix: "/contacts" });
   fastify.register(dealRoutes, { prefix: "/deals" });
