@@ -53,8 +53,11 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
-      - name: Lint, typecheck, test, build
-        run: pnpm turbo run lint typecheck test build
+      - name: Lint, typecheck, build
+        run: pnpm turbo run lint typecheck build
+
+      - name: Test
+        run: pnpm turbo run test --concurrency=1
 
       - name: Foundation integration gate
         run: pnpm --filter @felixos/integration-tests test

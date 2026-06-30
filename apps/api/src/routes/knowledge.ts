@@ -29,7 +29,7 @@ type SourceBody = {
   metadata?: Record<string, unknown>;
 };
 
-type SearchRow = typeof distilledItems.$inferSelect & {
+type SearchRow = Omit<typeof distilledItems.$inferSelect, "embedding"> & {
   sourceType: KnowledgeSourceType;
   sourceMetadata: Record<string, unknown>;
 };
@@ -107,6 +107,8 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
               )
               .orderBy(distilledItems.createdAt);
             if (existing.length > 0) return { kind: "existing" as const, rows: existing };
+          } else {
+            await tx.delete(distilledItems).where(eq(distilledItems.sourceId, source.id));
           }
 
           const drafts = await request.server.llm.distill(source.content, source.sourceType);
@@ -184,7 +186,6 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
               content: distilledItems.content,
               status: distilledItems.status,
               correctionText: distilledItems.correctionText,
-              embedding: distilledItems.embedding,
               embeddingModel: distilledItems.embeddingModel,
               createdAt: distilledItems.createdAt,
               updatedAt: distilledItems.updatedAt,
@@ -285,7 +286,7 @@ function toRawSourceView(row: typeof rawSources.$inferSelect) {
   };
 }
 
-function toDistilledItemView(row: typeof distilledItems.$inferSelect) {
+function toDistilledItemView(row: Omit<typeof distilledItems.$inferSelect, "embedding">) {
   return {
     id: row.id,
     tenantId: row.tenantId,
