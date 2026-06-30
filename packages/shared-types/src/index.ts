@@ -45,4 +45,4 @@ export type {
   ListResponse,
   PageInfo
 } from "./api.js";
-export type { SkillDescriptor } from "./skills.js";
+export type { SkillDescriptor, SkillKind, SkillSideEffectClass, TrustRung } from "./skills.js";
