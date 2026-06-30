@@ -10,7 +10,13 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 
 import { searchKnowledge } from "../lib/knowledge-search.js";
-import { sendBadRequest, sendConflict, sendNotFound, sendSuccess } from "../lib/responses.js";
+import {
+  sendBadRequest,
+  sendConflict,
+  sendError,
+  sendNotFound,
+  sendSuccess
+} from "../lib/responses.js";
 import { createSetGuard } from "../lib/validation.js";
 import { createKnowledgeRetrievalTool } from "@felixos/agent/tools/knowledge-retrieval.js";
 import { withRequestTenant } from "./context.js";
@@ -81,13 +87,19 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
         })
       );
 
-    const result = await runAgent({
-      query,
-      tools: [knowledgeTool, ...skillTools],
-      provider,
-      tenantId: request.tenantId,
-      ...(entityId !== undefined ? { entityId } : {})
-    });
+    let result;
+    try {
+      result = await runAgent({
+        query,
+        tools: [knowledgeTool, ...skillTools],
+        provider,
+        tenantId: request.tenantId,
+        ...(entityId !== undefined ? { entityId } : {})
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Agent execution failed";
+      return sendError(reply, 502, "agent_error", message);
+    }
 
     return sendSuccess(reply, { response: result.response, pendingActionIds });
   });

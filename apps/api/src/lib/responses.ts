@@ -1,6 +1,7 @@
 import type { FastifyReply } from "fastify";
 
-type ApiErrorCode = "bad_request" | "unauthorized" | "not_found" | "conflict" | "llm_error";
+type ApiErrorCode =
+  "bad_request" | "unauthorized" | "not_found" | "conflict" | "llm_error" | "agent_error";
 
 export function sendSuccess<T>(reply: FastifyReply, data: T): Promise<void> {
   return reply.send({ ok: true, data }) as unknown as Promise<void>;

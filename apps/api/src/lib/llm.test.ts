@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  LlmError,
   createOpenAiLlmShim,
   parseDistillationCompletion,
   validateEmbeddingDimensions
@@ -23,10 +24,13 @@ describe("LLM shim", () => {
     ]);
   });
 
-  it("returns an empty array for empty or unparseable distillation output", () => {
+  it("returns an empty array for empty or non-array distillation output", () => {
     expect(parseDistillationCompletion("")).toEqual([]);
-    expect(parseDistillationCompletion("not json")).toEqual([]);
     expect(parseDistillationCompletion(JSON.stringify({ type: "fact" }))).toEqual([]);
+  });
+
+  it("throws LlmError for unparseable distillation output", () => {
+    expect(() => parseDistillationCompletion("not json")).toThrow(LlmError);
   });
 
   it("validates 1024-dim embeddings", () => {

@@ -10,6 +10,7 @@ import type {
 import type { FastifyPluginAsync } from "fastify";
 
 import { searchKnowledge } from "../lib/knowledge-search.js";
+import { LlmError } from "../lib/llm.js";
 import {
   sendBadRequest,
   sendCreated,
@@ -136,8 +137,10 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
         .status(result.kind === "existing" ? 200 : 201)
         .send({ ok: true, data: result.rows.map(toDistilledItemView) });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "LLM request failed";
-      return sendError(reply, 502, "llm_error", message);
+      if (error instanceof LlmError) {
+        return sendError(reply, 502, "llm_error", error.message);
+      }
+      throw error;
     }
   });
 
@@ -170,8 +173,10 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
 
       return sendSuccess(reply, rows);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "LLM request failed";
-      return sendError(reply, 502, "llm_error", message);
+      if (error instanceof LlmError) {
+        return sendError(reply, 502, "llm_error", error.message);
+      }
+      throw error;
     }
   });
 
