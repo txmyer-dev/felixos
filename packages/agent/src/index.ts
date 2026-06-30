@@ -18,3 +18,5 @@ export type {
   InferenceProvider
 } from "./runner.js";
 export { runAgent } from "./runner.js";
+export type { TrustLadderOutcome, TrustLadderStore } from "./trust-ladder.js";
+export { getEffectiveRung, invokeThroughTrustLadder } from "./trust-ladder.js";
