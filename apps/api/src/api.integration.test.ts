@@ -87,6 +87,15 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("API integration", () =>
       databaseUrl: scopedSchemaUrl,
       privilegedDatabaseUrl: privilegedSchemaUrl,
       encryptionKey,
+      llm: {
+        embeddingModel: "test-embedding",
+        async distill() {
+          return [];
+        },
+        async embed() {
+          return Array.from({ length: 1024 }, () => 0);
+        }
+      },
       logger: false
     });
     privilegedDb = createPrivilegedDatabaseClient(privilegedSchemaUrl);

@@ -15,6 +15,16 @@ export type {
   TenantScoped
 } from "./entities.js";
 export type {
+  DistilledItemId,
+  DistilledItemStatus,
+  DistilledItemType,
+  DistilledItemView,
+  KnowledgeSearchResult,
+  KnowledgeSourceType,
+  RawSourceId,
+  RawSourceView
+} from "./knowledge.js";
+export type {
   AuthCodeKind,
   AuthenticatedSession,
   LoginRequest,
