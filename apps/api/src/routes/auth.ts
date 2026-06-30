@@ -2,6 +2,9 @@ import { authenticateRecoveryCode, authenticateTotp, serializeSessionCookie } fr
 import { tenants } from "@felixos/db";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
+
+import { sendBadRequest, sendUnauthorized } from "../lib/responses.js";
+
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: { tenantSlug?: string; code?: string; recoveryCode?: string };
@@ -20,9 +23,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       const { tenantSlug, code, recoveryCode } = request.body ?? {};
 
       if (!tenantSlug) {
-        return reply
-          .status(400)
-          .send({ ok: false, error: { code: "bad_request", message: "tenantSlug is required" } });
+        return sendBadRequest(reply, "tenantSlug is required");
       }
 
       const [tenant] = await request.server.privilegedDb.db
@@ -32,9 +33,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         .limit(1);
 
       if (!tenant) {
-        return reply
-          .status(401)
-          .send({ ok: false, error: { code: "unauthorized", message: "Authentication failed" } });
+        return sendUnauthorized(reply, "Authentication failed");
       }
 
       try {
@@ -50,10 +49,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (!code) {
-          return reply.status(400).send({
-            ok: false,
-            error: { code: "bad_request", message: "code or recoveryCode is required" }
-          });
+          return sendBadRequest(reply, "code or recoveryCode is required");
         }
 
         const result = await authenticateTotp(request.server.scopedDb, {
@@ -67,9 +63,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           .status(200)
           .send({ ok: true, data: toSessionView(result) });
       } catch {
-        return reply
-          .status(401)
-          .send({ ok: false, error: { code: "unauthorized", message: "Authentication failed" } });
+        return sendUnauthorized(reply, "Authentication failed");
       }
     }
   );

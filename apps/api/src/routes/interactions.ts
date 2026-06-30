@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { sendBadRequest, sendCreated, sendNotFound, sendSuccess } from "../lib/responses.js";
 import { withRequestTenant } from "./context.js";
 
 const interactionKinds = new Set(["email", "meeting", "call", "note", "task", "other"] as const);
@@ -16,7 +17,7 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
         tx.select().from(interactions).orderBy(interactions.occurredAt)
       )
     );
-    return reply.send({ ok: true, data: rows.map(toView) });
+    return sendSuccess(reply, rows.map(toView));
   });
 
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
@@ -26,11 +27,9 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Interaction not found" } });
+      return sendNotFound(reply, "Interaction not found");
     }
-    return reply.send({ ok: true, data: toView(row) });
+    return sendSuccess(reply, toView(row));
   });
 
   fastify.post<{
@@ -44,22 +43,10 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
   }>("/", async (request, reply) => {
     const { accountId, contactId, kind, occurredAt, summary } = request.body ?? {};
     if (!accountId || !kind || !occurredAt || !summary) {
-      return reply.status(400).send({
-        ok: false,
-        error: {
-          code: "bad_request",
-          message: "accountId, kind, occurredAt, and summary are required"
-        }
-      });
+      return sendBadRequest(reply, "accountId, kind, occurredAt, and summary are required");
     }
     if (!isInteractionKind(kind)) {
-      return reply.status(400).send({
-        ok: false,
-        error: {
-          code: "bad_request",
-          message: "kind must be one of: email, meeting, call, note, task, other"
-        }
-      });
+      return sendBadRequest(reply, "kind must be one of: email, meeting, call, note, task, other");
     }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
@@ -77,7 +64,7 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
           .returning()
       )
     );
-    return reply.status(201).send({ ok: true, data: toView(row!) });
+    return sendCreated(reply, toView(row!));
   });
 };
 

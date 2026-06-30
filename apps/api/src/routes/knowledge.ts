@@ -10,17 +10,22 @@ import type {
 import type { FastifyPluginAsync } from "fastify";
 
 import { searchKnowledge } from "../lib/knowledge-search.js";
+import {
+  sendBadRequest,
+  sendCreated,
+  sendError,
+  sendNotFound,
+  sendSuccess
+} from "../lib/responses.js";
+import { clampLimit, createSetGuard } from "../lib/validation.js";
 import { withRequestTenant } from "./context.js";
 
-const sourceTypes = new Set<KnowledgeSourceType>([
-  "email",
-  "slack",
-  "transcript",
-  "youtube",
-  "doc",
-  "note"
-]);
-const itemStatuses = new Set<DistilledItemStatus>(["pending", "accepted", "rejected", "corrected"]);
+const isKnowledgeSourceType = createSetGuard<KnowledgeSourceType>(
+  new Set<KnowledgeSourceType>(["email", "slack", "transcript", "youtube", "doc", "note"])
+);
+const isDistilledItemStatus = createSetGuard<DistilledItemStatus>(
+  new Set<DistilledItemStatus>(["pending", "accepted", "rejected", "corrected"])
+);
 
 type SourceBody = {
   sourceType?: string;
@@ -36,23 +41,17 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
         tx.select().from(rawSources).orderBy(rawSources.createdAt)
       )
     );
-    return reply.send({ ok: true, data: rows.map(toRawSourceView) });
+    return sendSuccess(reply, rows.map(toRawSourceView));
   });
 
   fastify.post<{ Body: SourceBody }>("/sources", async (request, reply) => {
     const { sourceType, content, entityId = null, metadata = {} } = request.body ?? {};
 
     if (!isKnowledgeSourceType(sourceType)) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "sourceType is required" }
-      });
+      return sendBadRequest(reply, "sourceType is required");
     }
     if (!content?.trim()) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "content is required" }
-      });
+      return sendBadRequest(reply, "content is required");
     }
 
     const [row] = await withRequestTenant(request, () =>
@@ -71,7 +70,7 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
 
-    return reply.status(201).send({ ok: true, data: toRawSourceView(row!) });
+    return sendCreated(reply, toRawSourceView(row!));
   });
 
   fastify.post<{
@@ -130,9 +129,7 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       if (result.kind === "not_found") {
-        return reply
-          .status(404)
-          .send({ ok: false, error: { code: "not_found", message: "Source not found" } });
+        return sendNotFound(reply, "Source not found");
       }
 
       return reply
@@ -140,7 +137,7 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ ok: true, data: result.rows.map(toDistilledItemView) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "LLM request failed";
-      return reply.status(502).send({ ok: false, error: { code: "llm_error", message } });
+      return sendError(reply, 502, "llm_error", message);
     }
   });
 
@@ -152,15 +149,10 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
     const { entityId } = request.query;
 
     if (!q) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "q is required" } });
+      return sendBadRequest(reply, "q is required");
     }
     if (entityId && globalOnly) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "entityId and globalOnly are mutually exclusive" }
-      });
+      return sendBadRequest(reply, "entityId and globalOnly are mutually exclusive");
     }
 
     const limit = clampLimit(request.query.limit);
@@ -176,10 +168,10 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
         tenantId: request.tenantId
       });
 
-      return reply.send({ ok: true, data: rows });
+      return sendSuccess(reply, rows);
     } catch (error) {
       const message = error instanceof Error ? error.message : "LLM request failed";
-      return reply.status(502).send({ ok: false, error: { code: "llm_error", message } });
+      return sendError(reply, 502, "llm_error", message);
     }
   });
 
@@ -189,16 +181,10 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
   }>("/items/:id", async (request, reply) => {
     const { status, correctionText = null } = request.body ?? {};
     if (!isDistilledItemStatus(status)) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "status is required" }
-      });
+      return sendBadRequest(reply, "status is required");
     }
     if (status === "corrected" && !correctionText?.trim()) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "correctionText is required for corrected items" }
-      });
+      return sendBadRequest(reply, "correctionText is required for corrected items");
     }
 
     const [row] = await withRequestTenant(request, () =>
@@ -216,29 +202,12 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Knowledge item not found" } });
+      return sendNotFound(reply, "Knowledge item not found");
     }
 
-    return reply.send({ ok: true, data: toDistilledItemView(row) });
+    return sendSuccess(reply, toDistilledItemView(row));
   });
 };
-
-function isKnowledgeSourceType(value: unknown): value is KnowledgeSourceType {
-  return typeof value === "string" && sourceTypes.has(value as KnowledgeSourceType);
-}
-
-function isDistilledItemStatus(value: unknown): value is DistilledItemStatus {
-  return typeof value === "string" && itemStatuses.has(value as DistilledItemStatus);
-}
-
-function clampLimit(rawLimit: string | undefined): number {
-  if (!rawLimit) return 20;
-  const parsed = Number.parseInt(rawLimit, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) return 20;
-  return Math.min(parsed, 100);
-}
 
 function toRawSourceView(row: typeof rawSources.$inferSelect) {
   return {

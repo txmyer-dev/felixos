@@ -2,6 +2,8 @@ import { sessionCookieName, validateSession } from "@felixos/auth";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
+import { sendUnauthorized } from "../lib/responses.js";
+
 declare module "fastify" {
   interface FastifyRequest {
     tenantId: string;
@@ -18,24 +20,18 @@ export const authMiddleware: FastifyPluginAsync = fp(async (fastify) => {
 
     const token = extractSessionToken(request);
     if (!token) {
-      return sendUnauthorized(reply);
+      return sendUnauthorized(reply, "Authentication required");
     }
 
     const payload = await validateSession(request.server.privilegedDb, token);
     if (!payload) {
-      return sendUnauthorized(reply);
+      return sendUnauthorized(reply, "Authentication required");
     }
 
     request.tenantId = payload.tenantId;
     request.sessionId = payload.sessionId;
   });
 });
-
-async function sendUnauthorized(reply: FastifyReply): Promise<void> {
-  await reply
-    .status(401)
-    .send({ ok: false, error: { code: "unauthorized", message: "Authentication required" } });
-}
 
 function extractSessionToken(request: FastifyRequest): string | undefined {
   const cookieHeader = request.headers.cookie;
