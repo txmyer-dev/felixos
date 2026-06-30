@@ -26,3 +26,6 @@ export {
   getEffectiveRung,
   invokeThroughTrustLadder
 } from "./trust-ladder.js";
+export { defaultRegistry } from "./registry.js";
+export { DocNoteCaptureSkill } from "./skills/doc-note-capture.js";
+export { YouTubeCaptureSkill, ExternalDependencyError } from "./skills/youtube-capture.js";
