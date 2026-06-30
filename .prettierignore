@@ -8,3 +8,6 @@ coverage/
 pnpm-lock.yaml
 README.md
 docs/plans/
+CLAUDE.md
+GEMINI.md
+agents-md-template-full.md

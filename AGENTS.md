@@ -112,28 +112,28 @@ The `/ce-*` commands belong to the compound-engineering plugin — recommended f
 
 **Manual fallback for each pipeline step:**
 
-| Plugin command | Manual equivalent |
-|---|---|
-| `/ce-brainstorm` | Discuss in the GitHub issue comment or a design doc before writing code. Goal: alignment on user-visible behavior and scope before the first commit. |
-| `/ce-plan` | Write an implementation plan to `docs/plans/YYYY-MM-DD-NNN-<type>-<slug>.md`. Existing plans in `docs/plans/` are the shape reference. |
-| `/ce-doc-review` | Have a teammate read the plan doc, or run an adversarial-review prompt against it via the Task tool. Goal: surface contradictions, missing acceptance criteria, scope creep. |
-| `/ce-frontend-design` | Sketch layout and data needs before coding. Keep the design aligned with the dense, scannable operational UI style in `## Frontend Expectations`. |
-| `/ce-work` | Write the code. Follow tier rules: test-first for safety-critical, tests-alongside for standard, no required tests for routine. |
-| `/ce-test-browser` | `pnpm dev` on `:3000`, click through affected routes in browser. |
-| `/ce-code-review` | Open a draft PR and request teammate review, or run `code-reviewer` + `silent-failure-hunter` from the `pr-review-toolkit` plugin via Task tool. |
-| `/ce-simplify-code` | Read the diff yourself for simplification, or run `code-simplifier` from `pr-review-toolkit` via Task tool. |
-| `/ce-debug` | 4-phase: reproduce → isolate → root-cause → fix-with-test. Don't accept "try this" without a hypothesis. |
-| `/ce-commit-push-pr` | `git add <files> && git commit -m "..." && git push -u origin <branch> && gh pr create --title ... --body ...`. See `## Branching, commits, and PRs` for the body structure. |
+| Plugin command            | Manual equivalent                                                                                                                                                                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/ce-brainstorm`          | Discuss in the GitHub issue comment or a design doc before writing code. Goal: alignment on user-visible behavior and scope before the first commit.                                                                                                                                                                                       |
+| `/ce-plan`                | Write an implementation plan to `docs/plans/YYYY-MM-DD-NNN-<type>-<slug>.md`. Existing plans in `docs/plans/` are the shape reference.                                                                                                                                                                                                     |
+| `/ce-doc-review`          | Have a teammate read the plan doc, or run an adversarial-review prompt against it via the Task tool. Goal: surface contradictions, missing acceptance criteria, scope creep.                                                                                                                                                               |
+| `/ce-frontend-design`     | Sketch layout and data needs before coding. Keep the design aligned with the dense, scannable operational UI style in `## Frontend Expectations`.                                                                                                                                                                                          |
+| `/ce-work`                | Write the code. Follow tier rules: test-first for safety-critical, tests-alongside for standard, no required tests for routine.                                                                                                                                                                                                            |
+| `/ce-test-browser`        | `pnpm dev` on `:3000`, click through affected routes in browser.                                                                                                                                                                                                                                                                           |
+| `/ce-code-review`         | Open a draft PR and request teammate review, or run `code-reviewer` + `silent-failure-hunter` from the `pr-review-toolkit` plugin via Task tool.                                                                                                                                                                                           |
+| `/ce-simplify-code`       | Read the diff yourself for simplification, or run `code-simplifier` from `pr-review-toolkit` via Task tool.                                                                                                                                                                                                                                |
+| `/ce-debug`               | 4-phase: reproduce → isolate → root-cause → fix-with-test. Don't accept "try this" without a hypothesis.                                                                                                                                                                                                                                   |
+| `/ce-commit-push-pr`      | `git add <files> && git commit -m "..." && git push -u origin <branch> && gh pr create --title ... --body ...`. See `## Branching, commits, and PRs` for the body structure.                                                                                                                                                               |
 | `/ce-resolve-pr-feedback` | For each human and Copilot thread: read → fix or reply → resolve via GraphQL `resolveReviewThread` mutation (`gh api graphql -f query='mutation { resolveReviewThread(input:{threadId:"..."}) { thread { isResolved } } }'`). List open threads with `gh pr view <n> --json reviewThreads`. Do not merge until all are `isResolved: true`. |
-| `/ce-compound` | Write a learnings doc to `docs/solutions/<category>/<slug>.md` with frontmatter (`module`, `tags`, `problem_type`). |
-| `/ce-compound-refresh` | Edit the relevant `docs/solutions/` entry when paths, names, or tooling it references have changed. |
+| `/ce-compound`            | Write a learnings doc to `docs/solutions/<category>/<slug>.md` with frontmatter (`module`, `tags`, `problem_type`).                                                                                                                                                                                                                        |
+| `/ce-compound-refresh`    | Edit the relevant `docs/solutions/` entry when paths, names, or tooling it references have changed.                                                                                                                                                                                                                                        |
 
 ### Tier rules
 
-| Tier | Examples in this repo | Process |
-|---|---|---|
-| **Routine** | Copy edits, lint fixes, config cleanup, package metadata, scaffold files mirroring an established pattern | `/ce-work` directly; `/ce-code-review` optional |
-| **Standard** | Shared type additions, new API endpoints, UI shell work, package wiring, non-security utilities | `/ce-plan` → `/ce-work` → `/ce-code-review` → `/ce-commit-push-pr` |
+| Tier                | Examples in this repo                                                                                                                                                                                                                                                                                                              | Process                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Routine**         | Copy edits, lint fixes, config cleanup, package metadata, scaffold files mirroring an established pattern                                                                                                                                                                                                                          | `/ce-work` directly; `/ce-code-review` optional                                                                                                       |
+| **Standard**        | Shared type additions, new API endpoints, UI shell work, package wiring, non-security utilities                                                                                                                                                                                                                                    | `/ce-plan` → `/ce-work` → `/ce-code-review` → `/ce-commit-push-pr`                                                                                    |
 | **Safety-critical** | `packages/db/src/schema/**`, `packages/db/src/rls.ts`, `packages/db/src/client.ts`, `packages/db/src/context.ts`, `packages/db/migrations/**`, `packages/auth/src/**`, `apps/api/src/middleware/**`, session handling, tenant resolution, recovery-code handling, privileged DB clients, import guards protecting tenant isolation | `/ce-brainstorm` → `/ce-plan` (every unit gets `Execution note: test-first`) → `/ce-work` → `/ce-code-review` → `/ce-commit-push-pr` → `/ce-compound` |
 
 Why these surfaces are safety-critical: FelixOS is multi-tenant from the first row. A mistake in these paths can leak tenant data across RLS boundaries, bypass TOTP auth, corrupt the entity spine, or silently weaken the guarantees that all other agents and phases depend on. Real Postgres is required for RLS and isolation tests — no mocks for security claims. `/ce-code-review` at effort `max` is mandatory before merge.
@@ -166,11 +166,11 @@ Test layering:
 
 Browser testing runs in this priority order — use the lowest tier that covers the change:
 
-| Tier | Tool | When to use |
-|---|---|---|
-| **Primary (ad-hoc)** | `/ce-test-browser` | First-pass "did I obviously break something" check on routes affected by the current diff |
-| **Scripted** | `playwright-cli` skill | Scripted interactions, form fills, multi-step navigation, screenshots beyond what `/ce-test-browser` drives |
-| **Codified (CI)** | Playwright (`@playwright/test`) | Codified regression tests, auth-gated flows, multi-step journeys that should run in CI |
+| Tier                 | Tool                            | When to use                                                                                                 |
+| -------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Primary (ad-hoc)** | `/ce-test-browser`              | First-pass "did I obviously break something" check on routes affected by the current diff                   |
+| **Scripted**         | `playwright-cli` skill          | Scripted interactions, form fills, multi-step navigation, screenshots beyond what `/ce-test-browser` drives |
+| **Codified (CI)**    | Playwright (`@playwright/test`) | Codified regression tests, auth-gated flows, multi-step journeys that should run in CI                      |
 
 **Dev server:** `pnpm dev` starts the Next.js web app on `:3000` and the Fastify API on `:4000`. Do not start, stop, or restart the user's running dev server — treat it as a user-managed process. `/ce-test-browser` auto-detects whatever is serving on `localhost:3000`.
 
@@ -217,17 +217,17 @@ For multi-PR work (e.g., a Foundation unit that touches both the DB schema and t
 
 ### Issue lifecycle
 
-| When | Status | Mechanism |
-|---|---|---|
-| Filed, not yet scheduled | Backlog | Manual |
-| Scheduled / ready to pick up | Todo | Manual |
-| Branch created (work starts) | In Progress | Manual |
-| PR opened (review starts) | In Review | Manual |
-| PR merged | Done | Auto — `Closes #N` closes the issue; board's built-in automation moves it |
-| Won't do / abandoned | Cancelled | Manual — close as **"not planned"**, then set Status = Cancelled |
-| Superseded by another issue | Duplicate | Manual — **"Close as duplicate"**, then set Status = Duplicate |
+| When                         | Status      | Mechanism                                                                 |
+| ---------------------------- | ----------- | ------------------------------------------------------------------------- |
+| Filed, not yet scheduled     | Backlog     | Manual                                                                    |
+| Scheduled / ready to pick up | Todo        | Manual                                                                    |
+| Branch created (work starts) | In Progress | Manual                                                                    |
+| PR opened (review starts)    | In Review   | Manual                                                                    |
+| PR merged                    | Done        | Auto — `Closes #N` closes the issue; board's built-in automation moves it |
+| Won't do / abandoned         | Cancelled   | Manual — close as **"not planned"**, then set Status = Cancelled          |
+| Superseded by another issue  | Duplicate   | Manual — **"Close as duplicate"**, then set Status = Duplicate            |
 
-The built-in "issue closed → Done" automation fires on every close — so closing as *not planned* or *duplicate* moves the board item to Done unless you set Status manually afterward.
+The built-in "issue closed → Done" automation fires on every close — so closing as _not planned_ or _duplicate_ moves the board item to Done unless you set Status manually afterward.
 
 After merge, verify the close landed: `gh issue view #N`. A mistyped keyword or non-default base branch breaks the chain silently.
 
@@ -235,12 +235,12 @@ Apply a **`blocked`** label (plus a comment naming the blocker) to any issue wai
 
 ### Labels
 
-| Group | Labels |
-|---|---|
-| **Tier** | `tier:routine`, `tier:standard`, `tier:safety-critical` |
-| **Area** | `area:workspace`, `area:shared-types`, `area:db`, `area:auth`, `area:api`, `area:web`, `area:cli` |
-| **Type** | `type:bug`, `type:feature`, `type:improvement`, `type:docs` |
-| **Flags** | `blocked`, `needs-info`, `priority:high`, `priority:low`, `good first issue` |
+| Group     | Labels                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| **Tier**  | `tier:routine`, `tier:standard`, `tier:safety-critical`                                           |
+| **Area**  | `area:workspace`, `area:shared-types`, `area:db`, `area:auth`, `area:api`, `area:web`, `area:cli` |
+| **Type**  | `type:bug`, `type:feature`, `type:improvement`, `type:docs`                                       |
+| **Flags** | `blocked`, `needs-info`, `priority:high`, `priority:low`, `good first issue`                      |
 
 ---
 
@@ -293,6 +293,7 @@ Closes #12
 `<type>(<scope>): <descriptive subject>` — same shape as a commit subject. Keep the issue number **out** of the title; it lives in the PR body as `Closes #N`.
 
 Examples:
+
 - `feat(api): add entity CRUD endpoints with tenant scoping`
 - `fix(db): clear ALS context on connection release`
 - `feat(web): implement TOTP login shell`
