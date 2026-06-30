@@ -1,15 +1,15 @@
 import { distilledItems, rawSources } from "@felixos/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import type {
   DistilledItemStatus,
   DistilledItemType,
-  KnowledgeSearchResult,
   KnowledgeSourceType
 } from "@felixos/shared-types";
 import type { FastifyPluginAsync } from "fastify";
 
+import { searchKnowledge } from "../lib/knowledge-search.js";
 import { withRequestTenant } from "./context.js";
 
 const sourceTypes = new Set<KnowledgeSourceType>([
@@ -27,11 +27,6 @@ type SourceBody = {
   content?: string;
   entityId?: string | null;
   metadata?: Record<string, unknown>;
-};
-
-type SearchRow = Omit<typeof distilledItems.$inferSelect, "embedding"> & {
-  sourceType: KnowledgeSourceType;
-  sourceMetadata: Record<string, unknown>;
 };
 
 export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
@@ -172,41 +167,16 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const embedding = await request.server.llm.embed(q);
-      const vector = toVectorSql(embedding);
-      const rows = await withRequestTenant(request, () =>
-        request.server.scopedDb.transaction((tx) =>
-          tx
-            .select({
-              id: distilledItems.id,
-              tenantId: distilledItems.tenantId,
-              sourceId: distilledItems.sourceId,
-              entityId: distilledItems.entityId,
-              isGlobal: distilledItems.isGlobal,
-              itemType: distilledItems.itemType,
-              content: distilledItems.content,
-              status: distilledItems.status,
-              correctionText: distilledItems.correctionText,
-              embeddingModel: distilledItems.embeddingModel,
-              createdAt: distilledItems.createdAt,
-              updatedAt: distilledItems.updatedAt,
-              sourceType: rawSources.sourceType,
-              sourceMetadata: rawSources.metadata
-            })
-            .from(distilledItems)
-            .innerJoin(rawSources, eq(distilledItems.sourceId, rawSources.id))
-            .where(
-              and(
-                inArray(distilledItems.status, ["accepted", "corrected"]),
-                entityId ? eq(distilledItems.entityId, entityId) : undefined,
-                globalOnly ? eq(distilledItems.isGlobal, true) : undefined
-              )
-            )
-            .orderBy(sql`${distilledItems.embedding} <=> ${vector}::vector`)
-            .limit(limit)
-        )
-      );
+      const rows = await searchKnowledge({
+        embedding,
+        ...(entityId !== undefined ? { entityId } : {}),
+        ...(globalOnly ? { globalOnly } : {}),
+        limit,
+        tenantScopedDb: request.server.scopedDb,
+        tenantId: request.tenantId
+      });
 
-      return reply.send({ ok: true, data: rows.map(toSearchResult) });
+      return reply.send({ ok: true, data: rows });
     } catch (error) {
       const message = error instanceof Error ? error.message : "LLM request failed";
       return reply.status(502).send({ ok: false, error: { code: "llm_error", message } });
@@ -270,10 +240,6 @@ function clampLimit(rawLimit: string | undefined): number {
   return Math.min(parsed, 100);
 }
 
-function toVectorSql(embedding: number[]): string {
-  return `[${embedding.join(",")}]`;
-}
-
 function toRawSourceView(row: typeof rawSources.$inferSelect) {
   return {
     id: row.id,
@@ -300,27 +266,5 @@ function toDistilledItemView(row: Omit<typeof distilledItems.$inferSelect, "embe
     embeddingModel: row.embeddingModel,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
-  };
-}
-
-function toSearchResult(row: SearchRow): KnowledgeSearchResult {
-  const item = toDistilledItemView(row);
-  return {
-    id: item.id,
-    tenantId: item.tenantId,
-    entityId: item.entityId,
-    isGlobal: item.isGlobal,
-    itemType: item.itemType,
-    content: item.content,
-    status: item.status,
-    correctionText: item.correctionText,
-    embeddingModel: item.embeddingModel,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    source: {
-      id: row.sourceId,
-      sourceType: row.sourceType,
-      metadata: row.sourceMetadata
-    }
   };
 }
