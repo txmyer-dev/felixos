@@ -1,4 +1,10 @@
-import { resolveInferenceProvider, runAgent, defaultRegistry } from "@felixos/agent";
+import {
+  resolveInferenceProvider,
+  runAgent,
+  defaultRegistry,
+  createDbTrustLadderStore,
+  createSkillTool
+} from "@felixos/agent";
 import { tenantSkillRungs, pendingActions } from "@felixos/db";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
@@ -45,10 +51,35 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     const pendingActionIds: string[] = [];
+    const store = createDbTrustLadderStore({
+      scopedDb: request.server.scopedDb,
+      tenantId: request.tenantId
+    });
+    const skillCtx = {
+      tenantId: request.tenantId,
+      scopedDb: request.server.scopedDb,
+      provider
+    };
+
+    const skillTools = defaultRegistry
+      .listDescriptors()
+      .map((d) => defaultRegistry.get(d.name)!)
+      .map((skill) =>
+        createSkillTool({
+          skill,
+          ctx: skillCtx,
+          store,
+          onOutcome: (outcome) => {
+            if (outcome.kind === "pending" && outcome.id) {
+              pendingActionIds.push(outcome.id);
+            }
+          }
+        })
+      );
 
     const result = await runAgent({
       query,
-      tools: [knowledgeTool],
+      tools: [knowledgeTool, ...skillTools],
       provider,
       tenantId: request.tenantId,
       ...(entityId !== undefined ? { entityId } : {})
