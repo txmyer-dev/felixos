@@ -249,9 +249,12 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
       headers: { cookie: tenantACookie }
     });
     expect(interactionsRes.statusCode).toBe(200);
-    const tasks = interactionsRes.json().data.filter(
-      (i: { kind: string; summary: string }) => i.kind === "task" && i.summary === "Follow up call"
-    );
+    const tasks = interactionsRes
+      .json()
+      .data.filter(
+        (i: { kind: string; summary: string }) =>
+          i.kind === "task" && i.summary === "Follow up call"
+      );
     expect(tasks).toHaveLength(1);
   });
 
