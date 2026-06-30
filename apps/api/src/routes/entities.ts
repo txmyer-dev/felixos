@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { sendBadRequest, sendCreated, sendNotFound, sendSuccess } from "../lib/responses.js";
 import { withRequestTenant } from "./context.js";
 
 export const entityRoutes: FastifyPluginAsync = async (fastify) => {
@@ -12,7 +13,7 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
         tx.select().from(entities).orderBy(entities.createdAt)
       )
     );
-    return reply.send({ ok: true, data: rows.map(toView) });
+    return sendSuccess(reply, rows.map(toView));
   });
 
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
@@ -22,11 +23,9 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Account not found" } });
+      return sendNotFound(reply, "Account not found");
     }
-    return reply.send({ ok: true, data: toView(row) });
+    return sendSuccess(reply, toView(row));
   });
 
   fastify.post<{
@@ -34,9 +33,7 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
   }>("/", async (request, reply) => {
     const { name, lifecycleStage = "prospect" } = request.body ?? {};
     if (!name) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "name is required" } });
+      return sendBadRequest(reply, "name is required");
     }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
@@ -51,7 +48,7 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
           .returning()
       )
     );
-    return reply.status(201).send({ ok: true, data: toView(row!) });
+    return sendCreated(reply, toView(row!));
   });
 
   fastify.patch<{
@@ -60,9 +57,7 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
   }>("/:id", async (request, reply) => {
     const { lifecycleStage } = request.body ?? {};
     if (!lifecycleStage) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "lifecycleStage is required" } });
+      return sendBadRequest(reply, "lifecycleStage is required");
     }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
@@ -77,11 +72,9 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Account not found" } });
+      return sendNotFound(reply, "Account not found");
     }
-    return reply.send({ ok: true, data: toView(row) });
+    return sendSuccess(reply, toView(row));
   });
 };
 

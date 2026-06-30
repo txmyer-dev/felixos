@@ -39,9 +39,7 @@ export function createDbTrustLadderStore(opts: {
             skillName: row.skillName,
             payload: row.payload as Record<string, unknown>,
             status: row.status,
-            ...(row.result !== undefined
-              ? { agentContext: JSON.stringify(row.result) }
-              : {})
+            ...(row.result !== undefined ? { agentContext: JSON.stringify(row.result) } : {})
           })
         )
       );

@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { sendBadRequest, sendSuccess } from "../lib/responses.js";
+import { createSetGuard } from "../lib/validation.js";
 import { withRequestTenant } from "./context.js";
 
 type AgentConfigBody = {
@@ -15,7 +17,9 @@ type AgentConfigBody = {
   supportsTools?: boolean;
 };
 
-const providers = new Set(["openai", "openrouter", "freellmapi"]);
+const isProvider = createSetGuard<"openai" | "openrouter" | "freellmapi">(
+  new Set(["openai", "openrouter", "freellmapi"])
+);
 
 export const agentConfigRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
@@ -29,25 +33,16 @@ export const agentConfigRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
 
-    return reply.send({ ok: true, data: row ? toView(row) : null });
+    return sendSuccess(reply, row ? toView(row) : null);
   });
 
   fastify.put<{ Body: AgentConfigBody }>("/", async (request, reply) => {
     const body = request.body ?? {};
     if (!isProvider(body.provider)) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "provider is required" }
-      });
+      return sendBadRequest(reply, "provider is required");
     }
     if (!body.apiKey?.trim() || !body.distillationModel?.trim() || !body.embeddingModel?.trim()) {
-      return reply.status(400).send({
-        ok: false,
-        error: {
-          code: "bad_request",
-          message: "apiKey, distillationModel, and embeddingModel are required"
-        }
-      });
+      return sendBadRequest(reply, "apiKey, distillationModel, and embeddingModel are required");
     }
 
     const encrypted = encryptSecret(
@@ -92,13 +87,9 @@ export const agentConfigRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
 
-    return reply.send({ ok: true, data: toView(row!) });
+    return sendSuccess(reply, toView(row!));
   });
 };
-
-function isProvider(value: unknown): value is "openai" | "openrouter" | "freellmapi" {
-  return typeof value === "string" && providers.has(value);
-}
 
 function toView(row: typeof tenantInferenceConfigs.$inferSelect) {
   return {
