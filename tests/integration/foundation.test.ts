@@ -60,6 +60,15 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl || !rawKey)(
       databaseUrl: databaseUrl ?? fallbackDatabaseUrl,
       privilegedDatabaseUrl: privilegedDatabaseUrl ?? fallbackDatabaseUrl,
       encryptionKey,
+      llm: {
+        embeddingModel: "test-embedding",
+        async distill() {
+          return [];
+        },
+        async embed() {
+          return Array.from({ length: 1024 }, () => 0);
+        }
+      },
       databaseOptions: { max: 1 },
       privilegedDatabaseOptions: { max: 1 },
       logger: false
