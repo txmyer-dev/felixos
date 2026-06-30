@@ -23,3 +23,5 @@ export { getEffectiveRung, invokeThroughTrustLadder } from "./trust-ladder.js";
 export { defaultRegistry } from "./registry.js";
 export { DocNoteCaptureSkill } from "./skills/doc-note-capture.js";
 export { YouTubeCaptureSkill, ExternalDependencyError } from "./skills/youtube-capture.js";
+export { DraftEmailSkill } from "./skills/draft-email.js";
+export { CreateTaskSkill } from "./skills/create-task.js";
