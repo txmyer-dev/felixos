@@ -4,9 +4,15 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 
 import { searchKnowledge } from "../lib/knowledge-search.js";
+import { sendBadRequest, sendConflict, sendNotFound, sendSuccess } from "../lib/responses.js";
+import { createSetGuard } from "../lib/validation.js";
 import { createKnowledgeRetrievalTool } from "@felixos/agent/tools/knowledge-retrieval.js";
 import { withRequestTenant } from "./context.js";
 import type { TrustRung } from "@felixos/shared-types";
+
+const isValidRung = createSetGuard<TrustRung>(
+  new Set<TrustRung>(["suggest", "draft-and-wait", "act-and-log", "full-auto"])
+);
 
 type AgentRunBody = {
   query?: string;
@@ -18,9 +24,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     const { query, entityId } = request.body ?? {};
 
     if (!query?.trim()) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "query is required" } });
+      return sendBadRequest(reply, "query is required");
     }
 
     const provider = await withRequestTenant(request, () =>
@@ -54,7 +58,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       ...(entityId !== undefined ? { entityId } : {})
     });
 
-    return reply.send({ ok: true, data: { response: result.response, pendingActionIds } });
+    return sendSuccess(reply, { response: result.response, pendingActionIds });
   });
 
   fastify.get("/pending", async (request, reply) => {
@@ -70,7 +74,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
 
-    return reply.send({ ok: true, data: rows.map(toPendingActionView) });
+    return sendSuccess(reply, rows.map(toPendingActionView));
   });
 
   fastify.post<{ Params: { id: string } }>("/pending/:id/approve", async (request, reply) => {
@@ -81,16 +85,11 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Pending action not found" } });
+      return sendNotFound(reply, "Pending action not found");
     }
 
     if (row.status !== "pending") {
-      return reply.status(409).send({
-        ok: false,
-        error: { code: "conflict", message: `Action already ${row.status}` }
-      });
+      return sendConflict(reply, `Action already ${row.status}`);
     }
 
     const [updated] = await withRequestTenant(request, () =>
@@ -103,7 +102,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
 
-    return reply.send({ ok: true, data: toPendingActionView(updated!) });
+    return sendSuccess(reply, toPendingActionView(updated!));
   });
 
   fastify.post<{ Params: { id: string } }>("/pending/:id/reject", async (request, reply) => {
@@ -114,16 +113,11 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Pending action not found" } });
+      return sendNotFound(reply, "Pending action not found");
     }
 
     if (row.status !== "pending") {
-      return reply.status(409).send({
-        ok: false,
-        error: { code: "conflict", message: `Action already ${row.status}` }
-      });
+      return sendConflict(reply, `Action already ${row.status}`);
     }
 
     const [updated] = await withRequestTenant(request, () =>
@@ -136,7 +130,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
 
-    return reply.send({ ok: true, data: toPendingActionView(updated!) });
+    return sendSuccess(reply, toPendingActionView(updated!));
   });
 
   fastify.put<{ Params: { skillName: string }; Body: { rung?: string } }>(
@@ -144,13 +138,10 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { rung } = request.body ?? {};
       if (!isValidRung(rung)) {
-        return reply.status(400).send({
-          ok: false,
-          error: {
-            code: "bad_request",
-            message: "rung must be one of: suggest, draft-and-wait, act-and-log, full-auto"
-          }
-        });
+        return sendBadRequest(
+          reply,
+          "rung must be one of: suggest, draft-and-wait, act-and-log, full-auto"
+        );
       }
 
       const [row] = await withRequestTenant(request, () =>
@@ -171,16 +162,10 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
         )
       );
 
-      return reply.send({ ok: true, data: row });
+      return sendSuccess(reply, row);
     }
   );
 };
-
-const validRungs = new Set<TrustRung>(["suggest", "draft-and-wait", "act-and-log", "full-auto"]);
-
-function isValidRung(value: unknown): value is TrustRung {
-  return typeof value === "string" && validRungs.has(value as TrustRung);
-}
 
 function toPendingActionView(row: typeof pendingActions.$inferSelect) {
   return {

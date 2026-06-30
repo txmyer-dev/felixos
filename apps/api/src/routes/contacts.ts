@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
+import { sendBadRequest, sendCreated, sendNotFound, sendSuccess } from "../lib/responses.js";
 import { withRequestTenant } from "./context.js";
 
 export const contactRoutes: FastifyPluginAsync = async (fastify) => {
@@ -12,7 +13,7 @@ export const contactRoutes: FastifyPluginAsync = async (fastify) => {
         tx.select().from(contacts).orderBy(contacts.createdAt)
       )
     );
-    return reply.send({ ok: true, data: rows.map(toView) });
+    return sendSuccess(reply, rows.map(toView));
   });
 
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
@@ -22,11 +23,9 @@ export const contactRoutes: FastifyPluginAsync = async (fastify) => {
       )
     );
     if (!row) {
-      return reply
-        .status(404)
-        .send({ ok: false, error: { code: "not_found", message: "Contact not found" } });
+      return sendNotFound(reply, "Contact not found");
     }
-    return reply.send({ ok: true, data: toView(row) });
+    return sendSuccess(reply, toView(row));
   });
 
   fastify.post<{
@@ -34,10 +33,7 @@ export const contactRoutes: FastifyPluginAsync = async (fastify) => {
   }>("/", async (request, reply) => {
     const { accountId, name, email, phone, role } = request.body ?? {};
     if (!accountId || !name) {
-      return reply.status(400).send({
-        ok: false,
-        error: { code: "bad_request", message: "accountId and name are required" }
-      });
+      return sendBadRequest(reply, "accountId and name are required");
     }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
@@ -55,7 +51,7 @@ export const contactRoutes: FastifyPluginAsync = async (fastify) => {
           .returning()
       )
     );
-    return reply.status(201).send({ ok: true, data: toView(row!) });
+    return sendCreated(reply, toView(row!));
   });
 };
 

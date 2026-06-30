@@ -3,6 +3,8 @@ import { runWithTenantContext } from "@felixos/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { KnowledgeSearchResult } from "@felixos/shared-types";
 
+import { clampLimit } from "./validation.js";
+
 export type KnowledgeSearchRow = Omit<typeof distilledItems.$inferSelect, "embedding"> & {
   sourceType: (typeof rawSources.$inferSelect)["sourceType"];
   sourceMetadata: Record<string, unknown>;
@@ -20,7 +22,7 @@ export type KnowledgeSearchOptions = {
 export async function searchKnowledge(
   opts: KnowledgeSearchOptions
 ): Promise<KnowledgeSearchResult[]> {
-  const limit = clampLimit(opts.limit);
+  const limit = clampLimit(opts.limit, 20, 100);
   const vector = toVectorSql(opts.embedding);
 
   const rows = await runWithTenantContext(opts.tenantId, () =>
@@ -80,12 +82,6 @@ function toSearchResult(row: KnowledgeSearchRow): KnowledgeSearchResult {
       metadata: row.sourceMetadata
     }
   };
-}
-
-function clampLimit(raw: number | undefined): number {
-  if (raw === undefined) return 20;
-  if (!Number.isFinite(raw) || raw < 1) return 20;
-  return Math.min(raw, 100);
 }
 
 function toVectorSql(embedding: number[]): string {
