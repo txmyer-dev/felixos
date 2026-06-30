@@ -1,15 +1,14 @@
 import "server-only";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 
 import type { Account, ApiResult } from "@felixos/shared-types";
 
+const apiOrigin = process.env.FELIXOS_API_ORIGIN ?? "http://localhost:3001";
+
 export async function fetchAccounts(): Promise<Account[]> {
   const cookieStore = await cookies();
-  const headerStore = await headers();
-  const host = headerStore.get("host") ?? "localhost";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-  const response = await fetch(`${protocol}://${host}/api/entities`, {
+  const response = await fetch(`${apiOrigin}/entities`, {
     headers: { cookie: cookieStore.toString() },
     cache: "no-store"
   });

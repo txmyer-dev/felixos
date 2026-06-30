@@ -8,53 +8,65 @@ import { sendBadRequest, sendUnauthorized } from "../lib/responses.js";
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: { tenantSlug?: string; code?: string; recoveryCode?: string };
-  }>("/login", async (request, reply) => {
-    const { tenantSlug, code, recoveryCode } = request.body ?? {};
+  }>(
+    "/login",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+          keyGenerator: (request) => request.ip
+        }
+      }
+    },
+    async (request, reply) => {
+      const { tenantSlug, code, recoveryCode } = request.body ?? {};
 
-    if (!tenantSlug) {
-      return sendBadRequest(reply, "tenantSlug is required");
-    }
+      if (!tenantSlug) {
+        return sendBadRequest(reply, "tenantSlug is required");
+      }
 
-    const [tenant] = await request.server.privilegedDb.db
-      .select({ id: tenants.id })
-      .from(tenants)
-      .where(eq(tenants.slug, tenantSlug))
-      .limit(1);
+      const [tenant] = await request.server.privilegedDb.db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.slug, tenantSlug))
+        .limit(1);
 
-    if (!tenant) {
-      return sendUnauthorized(reply, "Authentication failed");
-    }
+      if (!tenant) {
+        return sendUnauthorized(reply, "Authentication failed");
+      }
 
-    try {
-      if (recoveryCode) {
-        const result = await authenticateRecoveryCode(request.server.scopedDb, {
+      try {
+        if (recoveryCode) {
+          const result = await authenticateRecoveryCode(request.server.scopedDb, {
+            tenantId: tenant.id,
+            recoveryCode
+          });
+          return reply
+            .header("set-cookie", serializeSessionCookie(result.session.token))
+            .status(200)
+            .send({ ok: true, data: toSessionView(result) });
+        }
+
+        if (!code) {
+          return sendBadRequest(reply, "code or recoveryCode is required");
+        }
+
+        const result = await authenticateTotp(request.server.scopedDb, {
           tenantId: tenant.id,
-          recoveryCode
+          code,
+          encryptionKey: request.server.encryptionKey
         });
+
         return reply
           .header("set-cookie", serializeSessionCookie(result.session.token))
           .status(200)
           .send({ ok: true, data: toSessionView(result) });
+      } catch {
+        return sendUnauthorized(reply, "Authentication failed");
       }
-
-      if (!code) {
-        return sendBadRequest(reply, "code or recoveryCode is required");
-      }
-
-      const result = await authenticateTotp(request.server.scopedDb, {
-        tenantId: tenant.id,
-        code,
-        encryptionKey: request.server.encryptionKey
-      });
-
-      return reply
-        .header("set-cookie", serializeSessionCookie(result.session.token))
-        .status(200)
-        .send({ ok: true, data: toSessionView(result) });
-    } catch {
-      return sendUnauthorized(reply, "Authentication failed");
     }
-  });
+  );
 };
 
 function toSessionView(result: {

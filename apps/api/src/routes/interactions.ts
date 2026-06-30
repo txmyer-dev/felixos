@@ -6,6 +6,10 @@ import type { FastifyPluginAsync } from "fastify";
 import { sendBadRequest, sendCreated, sendNotFound, sendSuccess } from "../lib/responses.js";
 import { withRequestTenant } from "./context.js";
 
+const interactionKinds = new Set(["email", "meeting", "call", "note", "task", "other"] as const);
+
+type InteractionKind = (typeof interactions.$inferInsert)["kind"];
+
 export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await withRequestTenant(request, () =>
@@ -41,6 +45,9 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
     if (!accountId || !kind || !occurredAt || !summary) {
       return sendBadRequest(reply, "accountId, kind, occurredAt, and summary are required");
     }
+    if (!isInteractionKind(kind)) {
+      return sendBadRequest(reply, "kind must be one of: email, meeting, call, note, task, other");
+    }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
@@ -50,7 +57,7 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
             tenantId: request.tenantId,
             accountId,
             contactId: contactId ?? null,
-            kind: kind as (typeof interactions.$inferInsert)["kind"],
+            kind,
             occurredAt: new Date(occurredAt),
             summary
           })
@@ -60,6 +67,10 @@ export const interactionRoutes: FastifyPluginAsync = async (fastify) => {
     return sendCreated(reply, toView(row!));
   });
 };
+
+function isInteractionKind(value: unknown): value is InteractionKind {
+  return typeof value === "string" && interactionKinds.has(value as InteractionKind);
+}
 
 function toView(row: typeof interactions.$inferSelect) {
   return {
