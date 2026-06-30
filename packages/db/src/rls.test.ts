@@ -13,7 +13,9 @@ import { contacts, entities } from "./schema/index.js";
 
 const migrationUrls = [
   new URL("../migrations/0000_foundation_schema.sql", import.meta.url),
-  new URL("../migrations/0001_rls_policies.sql", import.meta.url)
+  new URL("../migrations/0001_rls_policies.sql", import.meta.url),
+  new URL("../migrations/0002_knowledge_schema.sql", import.meta.url),
+  new URL("../migrations/0003_knowledge_rls.sql", import.meta.url)
 ];
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -43,6 +45,8 @@ type RlsFixture = {
   accountA: string;
   accountB: string;
   contactA: string;
+  rawSourceA: string;
+  rawSourceB: string;
 };
 
 async function seedFixture(sql: Sql): Promise<Omit<RlsFixture, "sql" | "schemaName">> {
@@ -51,6 +55,8 @@ async function seedFixture(sql: Sql): Promise<Omit<RlsFixture, "sql" | "schemaNa
   const accountA = randomUUID();
   const accountB = randomUUID();
   const contactA = randomUUID();
+  const rawSourceA = randomUUID();
+  const rawSourceB = randomUUID();
 
   await sql`
     INSERT INTO tenants (id, slug, name)
@@ -68,8 +74,40 @@ async function seedFixture(sql: Sql): Promise<Omit<RlsFixture, "sql" | "schemaNa
     INSERT INTO contacts (id, tenant_id, account_id, name)
     VALUES (${contactA}, ${tenantA}, ${accountA}, 'Contact A')
   `;
+  await sql`
+    INSERT INTO raw_sources (id, tenant_id, entity_id, source_type, content)
+    VALUES
+      (${rawSourceA}, ${tenantA}, ${accountA}, 'note', 'Tenant A raw source'),
+      (${rawSourceB}, ${tenantB}, ${accountB}, 'note', 'Tenant B raw source')
+  `;
+  await sql`
+    INSERT INTO distilled_items (
+      id,
+      tenant_id,
+      source_id,
+      entity_id,
+      is_global,
+      item_type,
+      content,
+      status,
+      embedding,
+      embedding_model
+    )
+    VALUES (
+      ${randomUUID()},
+      ${tenantA},
+      ${rawSourceA},
+      ${accountA},
+      false,
+      'fact',
+      'Tenant A distilled item',
+      'accepted',
+      ${"[" + Array.from({ length: 1024 }, () => "0").join(",") + "]"}::vector,
+      'test-embedding'
+    )
+  `;
 
-  return { tenantA, tenantB, accountA, accountB, contactA };
+  return { tenantA, tenantB, accountA, accountB, contactA, rawSourceA, rawSourceB };
 }
 
 async function setAppRole(sql: Sql) {
@@ -170,6 +208,16 @@ describe.skipIf(!databaseUrl)("RLS tenant isolation", () => {
     );
 
     expect(rows).toEqual([{ id: fixture.accountA, tenant_id: fixture.tenantA }]);
+
+    const rawSources = await withTenantTransaction(
+      fixture.sql,
+      fixture.tenantA,
+      () =>
+        fixture.sql<{ id: string; tenant_id: string }[]>`
+          SELECT id, tenant_id FROM raw_sources ORDER BY id
+        `
+    );
+    expect(rawSources).toEqual([{ id: fixture.rawSourceA, tenant_id: fixture.tenantA }]);
   });
 
   test("does not leak stale tenant context across reused pooled connections", async () => {
@@ -215,6 +263,42 @@ describe.skipIf(!databaseUrl)("RLS tenant isolation", () => {
       )
     ).rejects.toThrow();
 
+    await expect(
+      withTenantTransaction(
+        fixture.sql,
+        fixture.tenantA,
+        () => fixture.sql`
+          INSERT INTO raw_sources (id, tenant_id, entity_id, source_type, content)
+          VALUES (${randomUUID()}, ${fixture.tenantB}, ${fixture.accountB}, 'note', 'Wrong Tenant')
+        `
+      )
+    ).rejects.toThrow();
+
+    await expect(
+      withTenantTransaction(
+        fixture.sql,
+        fixture.tenantA,
+        () => fixture.sql`
+          INSERT INTO distilled_items (
+            id,
+            tenant_id,
+            source_id,
+            entity_id,
+            item_type,
+            content
+          )
+          VALUES (
+            ${randomUUID()},
+            ${fixture.tenantA},
+            ${fixture.rawSourceB},
+            ${fixture.accountA},
+            'fact',
+            'Wrong Source Tenant'
+          )
+        `
+      )
+    ).rejects.toThrow();
+
     const deletedRows = await withTenantTransaction(
       fixture.sql,
       fixture.tenantA,
@@ -227,6 +311,37 @@ describe.skipIf(!databaseUrl)("RLS tenant isolation", () => {
     );
 
     expect(deletedRows).toHaveLength(0);
+  });
+
+  test("rejects embeddings with the wrong dimension count", async () => {
+    await setAppRole(fixture.sql);
+
+    await expect(
+      withTenantTransaction(
+        fixture.sql,
+        fixture.tenantA,
+        () => fixture.sql`
+          INSERT INTO distilled_items (
+            id,
+            tenant_id,
+            source_id,
+            item_type,
+            content,
+            embedding,
+            embedding_model
+          )
+          VALUES (
+            ${randomUUID()},
+            ${fixture.tenantA},
+            ${fixture.rawSourceA},
+            'fact',
+            'Bad embedding',
+            '[0,0,0]'::vector,
+            'test-embedding'
+          )
+        `
+      )
+    ).rejects.toThrow();
   });
 
   test("scoped client sets tenant context per transaction", async () => {
