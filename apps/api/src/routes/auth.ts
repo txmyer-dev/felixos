@@ -51,11 +51,24 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         .header("set-cookie", serializeSessionCookie(result.session.token))
         .status(200)
         .send({ ok: true, data: toSessionView(result) });
-    } catch {
-      return sendUnauthorized(reply, "Authentication failed");
+    } catch (error) {
+      if (error instanceof Error && isAuthenticationError(error)) {
+        return sendUnauthorized(reply, "Authentication failed");
+      }
+      throw error;
     }
   });
 };
+
+const authErrorMessages = new Set([
+  "Invalid authentication code",
+  "Authentication code has already been used",
+  "Invalid recovery code"
+]);
+
+function isAuthenticationError(error: Error): boolean {
+  return authErrorMessages.has(error.message);
+}
 
 function toSessionView(result: {
   session: { id: string; tenantId: string; createdAt: Date; expiresAt: Date };

@@ -47,8 +47,11 @@ export async function authenticateTotp(
           codeHash,
           timeStep: verification.timeStep
         });
-      } catch {
-        throw new Error("Authentication code has already been used");
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new Error("Authentication code has already been used", { cause: error });
+        }
+        throw error;
       }
 
       const session = createSession(input.tenantId, input.now ? { now: input.now } : {});
@@ -102,5 +105,15 @@ export async function authenticateRecoveryCode(
 
       return { session, codeKind: "recovery_code" };
     })
+  );
+}
+
+const PG_UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code: string }).code === PG_UNIQUE_VIOLATION
   );
 }

@@ -7,12 +7,17 @@ const apiOrigin = process.env.FELIXOS_API_ORIGIN ?? "http://localhost:3001";
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData();
 
-  const response = await fetch(`${apiOrigin}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(buildLoginPayload(formData)),
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiOrigin}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(buildLoginPayload(formData)),
+      cache: "no-store"
+    });
+  } catch {
+    return NextResponse.redirect(new URL("/login?error=unavailable", request.url), 303);
+  }
 
   if (!response.ok) {
     return NextResponse.redirect(new URL("/login?error=1", request.url), 303);
