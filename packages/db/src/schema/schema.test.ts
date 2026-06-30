@@ -4,10 +4,19 @@ import { readFile } from "node:fs/promises";
 import postgres from "postgres";
 import { describe, expect, test } from "vitest";
 
-const migrationUrl = new URL("../../migrations/0000_foundation_schema.sql", import.meta.url);
+const migrationUrls = [
+  new URL("../../migrations/0000_foundation_schema.sql", import.meta.url),
+  new URL("../../migrations/0001_rls_policies.sql", import.meta.url),
+  new URL("../../migrations/0002_knowledge_schema.sql", import.meta.url),
+  new URL("../../migrations/0003_knowledge_rls.sql", import.meta.url)
+];
 
-async function readMigration() {
-  return readFile(migrationUrl, "utf8");
+async function readMigration(url: URL) {
+  return readFile(url, "utf8");
+}
+
+async function readMigrations() {
+  return Promise.all(migrationUrls.map((url) => readMigration(url)));
 }
 
 function quoteIdentifier(identifier: string) {
@@ -16,7 +25,7 @@ function quoteIdentifier(identifier: string) {
 
 describe("foundation schema migration", () => {
   test("defines tenant-scoped tables and encrypted secret columns", async () => {
-    const migration = await readMigration();
+    const migration = await readMigration(migrationUrls[0]!);
 
     expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS vector");
     expect(migration).toContain("tenant_id uuid NOT NULL REFERENCES tenants");
@@ -29,8 +38,7 @@ describe("foundation schema migration", () => {
   });
 
   test("defines RLS policies and tenant-aware child constraints", async () => {
-    const migrationUrl = new URL("../../migrations/0001_rls_policies.sql", import.meta.url);
-    const migration = await readFile(migrationUrl, "utf8");
+    const migration = await readMigration(migrationUrls[1]!);
 
     expect(migration).toContain("CREATE ROLE felixos_app_role NOLOGIN NOBYPASSRLS");
     expect(migration).toContain("CREATE ROLE felixos_privileged_role NOLOGIN BYPASSRLS");
@@ -38,6 +46,32 @@ describe("foundation schema migration", () => {
     expect(migration).toContain("current_setting('app.current_tenant', true)");
     expect(migration).toContain("FOREIGN KEY (tenant_id, account_id)");
     expect(migration).toContain("FOREIGN KEY (tenant_id, contact_id)");
+  });
+
+  test("defines knowledge tables, vector storage, and tenant-aware constraints", async () => {
+    const migration = await readMigration(migrationUrls[2]!);
+
+    expect(migration).toContain("CREATE TYPE knowledge_source_type");
+    expect(migration).toContain("CREATE TYPE distilled_item_type");
+    expect(migration).toContain("CREATE TYPE distilled_item_status");
+    expect(migration).toContain("CREATE TABLE raw_sources");
+    expect(migration).toContain("CREATE TABLE distilled_items");
+    expect(migration).toContain("embedding vector(1024)");
+    expect(migration).toContain("vector_dims(embedding) = 1024");
+    expect(migration).toContain("USING hnsw (embedding vector_cosine_ops)");
+    expect(migration).toContain("FOREIGN KEY (tenant_id, entity_id)");
+    expect(migration).toContain("FOREIGN KEY (tenant_id, source_id)");
+  });
+
+  test("defines knowledge RLS policies", async () => {
+    const migration = await readMigration(migrationUrls[3]!);
+
+    expect(migration).toContain("ALTER TABLE raw_sources ENABLE ROW LEVEL SECURITY");
+    expect(migration).toContain("ALTER TABLE raw_sources FORCE ROW LEVEL SECURITY");
+    expect(migration).toContain("ALTER TABLE distilled_items ENABLE ROW LEVEL SECURITY");
+    expect(migration).toContain("ALTER TABLE distilled_items FORCE ROW LEVEL SECURITY");
+    expect(migration).toContain("current_setting('app.current_tenant', true)");
+    expect(migration).toContain("GRANT SELECT, INSERT, UPDATE, DELETE");
   });
 
   test.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -56,7 +90,9 @@ describe("foundation schema migration", () => {
       try {
         await sql.unsafe(`CREATE SCHEMA ${quotedSchemaName}`);
         await sql.unsafe(`SET search_path TO ${quotedSchemaName}, public`);
-        await sql.unsafe(await readMigration());
+        for (const migration of await readMigrations()) {
+          await sql.unsafe(migration);
+        }
 
         const extensionRows = await sql<{ extname: string }[]>`
           SELECT extname FROM pg_extension WHERE extname = 'vector'
@@ -82,6 +118,18 @@ describe("foundation schema migration", () => {
           INSERT INTO entities (id, name)
           VALUES (${randomUUID()}, 'Acme Example')
         `).rejects.toThrow();
+
+        const knowledgeTables = await sql<{ table_name: string }[]>`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = ${schemaName}
+            AND table_name IN ('raw_sources', 'distilled_items')
+          ORDER BY table_name
+        `;
+        expect(knowledgeTables.map((row) => row.table_name)).toEqual([
+          "distilled_items",
+          "raw_sources"
+        ]);
       } finally {
         await sql.unsafe(`DROP SCHEMA IF EXISTS ${quotedSchemaName} CASCADE`);
         await sql.end({ timeout: 5 });
