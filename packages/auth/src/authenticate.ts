@@ -110,10 +110,14 @@ export async function authenticateRecoveryCode(
 
 const PG_UNIQUE_VIOLATION = "23505";
 
-function isUniqueViolation(error: unknown): boolean {
+function hasCode(error: unknown, code: string): boolean {
   return (
-    error instanceof Error &&
-    "code" in error &&
-    (error as Error & { code: string }).code === PG_UNIQUE_VIOLATION
+    error instanceof Error && "code" in error && (error as Error & { code: string }).code === code
   );
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  if (hasCode(error, PG_UNIQUE_VIOLATION)) return true;
+  if (error instanceof Error && error.cause) return isUniqueViolation(error.cause);
+  return false;
 }
