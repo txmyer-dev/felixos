@@ -14,7 +14,10 @@ export const tenantScopedTables = [
   "recovery_codes",
   "totp_replay_guards",
   "raw_sources",
-  "distilled_items"
+  "distilled_items",
+  "tenant_inference_configs",
+  "tenant_skill_rungs",
+  "pending_actions"
 ] as const;
 
 export type TenantScopedTable = (typeof tenantScopedTables)[number];

@@ -6,17 +6,14 @@ import {
   type Tool
 } from "@openai/agents";
 
+import type { ResolvedInferenceProvider } from "./provider.js";
+
 export type AgentRunContext = {
   tenantId: string;
   entityId?: string;
 };
 
-export type InferenceProvider = {
-  apiKey: string;
-  model: string;
-  baseURL?: string;
-  supportsTools: boolean;
-};
+export type InferenceProvider = ResolvedInferenceProvider;
 
 export type AgentTool = Tool<AgentRunContext>;
 

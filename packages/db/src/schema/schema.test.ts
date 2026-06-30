@@ -8,7 +8,9 @@ const migrationUrls = [
   new URL("../../migrations/0000_foundation_schema.sql", import.meta.url),
   new URL("../../migrations/0001_rls_policies.sql", import.meta.url),
   new URL("../../migrations/0002_knowledge_schema.sql", import.meta.url),
-  new URL("../../migrations/0003_knowledge_rls.sql", import.meta.url)
+  new URL("../../migrations/0003_knowledge_rls.sql", import.meta.url),
+  new URL("../../migrations/0004_agent_schema.sql", import.meta.url),
+  new URL("../../migrations/0005_agent_rls.sql", import.meta.url)
 ];
 
 async function readMigration(url: URL) {
@@ -74,6 +76,30 @@ describe("foundation schema migration", () => {
     expect(migration).toContain("GRANT SELECT, INSERT, UPDATE, DELETE");
   });
 
+  test("defines agent configuration tables and enums", async () => {
+    const migration = await readMigration(migrationUrls[4]!);
+
+    expect(migration).toContain("CREATE TYPE inference_provider");
+    expect(migration).toContain("CREATE TYPE trust_rung");
+    expect(migration).toContain("CREATE TYPE pending_action_status");
+    expect(migration).toContain("CREATE TABLE tenant_inference_configs");
+    expect(migration).toContain("CREATE TABLE tenant_skill_rungs");
+    expect(migration).toContain("CREATE TABLE pending_actions");
+    expect(migration).toContain("api_key_ciphertext text NOT NULL");
+    expect(migration).toContain("supports_tools boolean NOT NULL DEFAULT true");
+    expect(migration).toContain("PRIMARY KEY (tenant_id, skill_name)");
+  });
+
+  test("defines agent table RLS policies", async () => {
+    const migration = await readMigration(migrationUrls[5]!);
+
+    expect(migration).toContain("ALTER TABLE tenant_inference_configs ENABLE ROW LEVEL SECURITY");
+    expect(migration).toContain("ALTER TABLE tenant_skill_rungs FORCE ROW LEVEL SECURITY");
+    expect(migration).toContain("ALTER TABLE pending_actions FORCE ROW LEVEL SECURITY");
+    expect(migration).toContain("current_setting('app.current_tenant', true)");
+    expect(migration).toContain("GRANT SELECT, INSERT, UPDATE, DELETE");
+  });
+
   test.skipIf(!process.env.TEST_DATABASE_URL)(
     "applies to Postgres with pgvector and enforces required tenant_id columns",
     async () => {
@@ -129,6 +155,23 @@ describe("foundation schema migration", () => {
         expect(knowledgeTables.map((row) => row.table_name)).toEqual([
           "distilled_items",
           "raw_sources"
+        ]);
+
+        const agentTables = await sql<{ table_name: string }[]>`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = ${schemaName}
+            AND table_name IN (
+              'tenant_inference_configs',
+              'tenant_skill_rungs',
+              'pending_actions'
+            )
+          ORDER BY table_name
+        `;
+        expect(agentTables.map((row) => row.table_name)).toEqual([
+          "pending_actions",
+          "tenant_inference_configs",
+          "tenant_skill_rungs"
         ]);
       } finally {
         await sql.unsafe(`DROP SCHEMA IF EXISTS ${quotedSchemaName} CASCADE`);

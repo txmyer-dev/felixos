@@ -107,9 +107,18 @@ importers:
 
   packages/agent:
     dependencies:
+      '@felixos/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@felixos/db':
+        specifier: workspace:*
+        version: link:../db
       '@openai/agents':
         specifier: ^0.12.0
         version: 0.12.0(ws@8.21.0)(zod@4.4.3)
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
     devDependencies:
       '@types/node':
         specifier: ^24.13.2

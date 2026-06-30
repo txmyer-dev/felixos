@@ -15,7 +15,9 @@ const migrationUrls = [
   new URL("../migrations/0000_foundation_schema.sql", import.meta.url),
   new URL("../migrations/0001_rls_policies.sql", import.meta.url),
   new URL("../migrations/0002_knowledge_schema.sql", import.meta.url),
-  new URL("../migrations/0003_knowledge_rls.sql", import.meta.url)
+  new URL("../migrations/0003_knowledge_rls.sql", import.meta.url),
+  new URL("../migrations/0004_agent_schema.sql", import.meta.url),
+  new URL("../migrations/0005_agent_rls.sql", import.meta.url)
 ];
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -47,6 +49,8 @@ type RlsFixture = {
   contactA: string;
   rawSourceA: string;
   rawSourceB: string;
+  pendingActionA: string;
+  pendingActionB: string;
 };
 
 async function seedFixture(sql: Sql): Promise<Omit<RlsFixture, "sql" | "schemaName">> {
@@ -57,6 +61,10 @@ async function seedFixture(sql: Sql): Promise<Omit<RlsFixture, "sql" | "schemaNa
   const contactA = randomUUID();
   const rawSourceA = randomUUID();
   const rawSourceB = randomUUID();
+  const inferenceConfigA = randomUUID();
+  const inferenceConfigB = randomUUID();
+  const pendingActionA = randomUUID();
+  const pendingActionB = randomUUID();
 
   await sql`
     INSERT INTO tenants (id, slug, name)
@@ -106,8 +114,66 @@ async function seedFixture(sql: Sql): Promise<Omit<RlsFixture, "sql" | "schemaNa
       'test-embedding'
     )
   `;
+  await sql`
+    INSERT INTO tenant_inference_configs (
+      id,
+      tenant_id,
+      provider,
+      api_key_ciphertext,
+      api_key_nonce,
+      api_key_key_id,
+      distillation_model,
+      embedding_model,
+      supports_tools
+    )
+    VALUES
+      (
+        ${inferenceConfigA},
+        ${tenantA},
+        'openai',
+        'ciphertext-a',
+        'nonce-a',
+        'key-a',
+        'gpt-a',
+        'embedding-a',
+        true
+      ),
+      (
+        ${inferenceConfigB},
+        ${tenantB},
+        'openrouter',
+        'ciphertext-b',
+        'nonce-b',
+        'key-b',
+        'gpt-b',
+        'embedding-b',
+        false
+      )
+  `;
+  await sql`
+    INSERT INTO tenant_skill_rungs (tenant_id, skill_name, rung)
+    VALUES
+      (${tenantA}, 'draft-email', 'draft-and-wait'),
+      (${tenantB}, 'draft-email', 'suggest')
+  `;
+  await sql`
+    INSERT INTO pending_actions (id, tenant_id, skill_name, payload, status)
+    VALUES
+      (${pendingActionA}, ${tenantA}, 'draft-email', '{"subject":"A"}'::jsonb, 'pending'),
+      (${pendingActionB}, ${tenantB}, 'draft-email', '{"subject":"B"}'::jsonb, 'pending')
+  `;
 
-  return { tenantA, tenantB, accountA, accountB, contactA, rawSourceA, rawSourceB };
+  return {
+    tenantA,
+    tenantB,
+    accountA,
+    accountB,
+    contactA,
+    rawSourceA,
+    rawSourceB,
+    pendingActionA,
+    pendingActionB
+  };
 }
 
 async function setAppRole(sql: Sql) {
@@ -218,6 +284,36 @@ describe.skipIf(!databaseUrl)("RLS tenant isolation", () => {
         `
     );
     expect(rawSources).toEqual([{ id: fixture.rawSourceA, tenant_id: fixture.tenantA }]);
+
+    const inferenceConfigs = await withTenantTransaction(
+      fixture.sql,
+      fixture.tenantA,
+      () =>
+        fixture.sql<{ tenant_id: string; distillation_model: string }[]>`
+          SELECT tenant_id, distillation_model FROM tenant_inference_configs
+        `
+    );
+    expect(inferenceConfigs).toEqual([{ tenant_id: fixture.tenantA, distillation_model: "gpt-a" }]);
+
+    const rungs = await withTenantTransaction(
+      fixture.sql,
+      fixture.tenantA,
+      () =>
+        fixture.sql<{ tenant_id: string; rung: string }[]>`
+          SELECT tenant_id, rung FROM tenant_skill_rungs
+        `
+    );
+    expect(rungs).toEqual([{ tenant_id: fixture.tenantA, rung: "draft-and-wait" }]);
+
+    const pendingActions = await withTenantTransaction(
+      fixture.sql,
+      fixture.tenantA,
+      () =>
+        fixture.sql<{ id: string; tenant_id: string }[]>`
+          SELECT id, tenant_id FROM pending_actions
+        `
+    );
+    expect(pendingActions).toEqual([{ id: fixture.pendingActionA, tenant_id: fixture.tenantA }]);
   });
 
   test("does not leak stale tenant context across reused pooled connections", async () => {
@@ -299,6 +395,57 @@ describe.skipIf(!databaseUrl)("RLS tenant isolation", () => {
       )
     ).rejects.toThrow();
 
+    await expect(
+      withTenantTransaction(
+        fixture.sql,
+        fixture.tenantA,
+        () => fixture.sql`
+          INSERT INTO tenant_inference_configs (
+            id,
+            tenant_id,
+            provider,
+            api_key_ciphertext,
+            api_key_nonce,
+            api_key_key_id,
+            distillation_model,
+            embedding_model
+          )
+          VALUES (
+            ${randomUUID()},
+            ${fixture.tenantB},
+            'openai',
+            'wrong',
+            'wrong',
+            'wrong',
+            'wrong',
+            'wrong'
+          )
+        `
+      )
+    ).rejects.toThrow();
+
+    await expect(
+      withTenantTransaction(
+        fixture.sql,
+        fixture.tenantA,
+        () => fixture.sql`
+          INSERT INTO tenant_skill_rungs (tenant_id, skill_name, rung)
+          VALUES (${fixture.tenantB}, 'create-task', 'act-and-log')
+        `
+      )
+    ).rejects.toThrow();
+
+    await expect(
+      withTenantTransaction(
+        fixture.sql,
+        fixture.tenantA,
+        () => fixture.sql`
+          INSERT INTO pending_actions (id, tenant_id, skill_name, payload)
+          VALUES (${randomUUID()}, ${fixture.tenantB}, 'draft-email', '{}'::jsonb)
+        `
+      )
+    ).rejects.toThrow();
+
     const deletedRows = await withTenantTransaction(
       fixture.sql,
       fixture.tenantA,
@@ -311,6 +458,19 @@ describe.skipIf(!databaseUrl)("RLS tenant isolation", () => {
     );
 
     expect(deletedRows).toHaveLength(0);
+
+    const deletedPendingActions = await withTenantTransaction(
+      fixture.sql,
+      fixture.tenantA,
+      () =>
+        fixture.sql<{ id: string }[]>`
+        DELETE FROM pending_actions
+        WHERE id = ${fixture.pendingActionB}
+        RETURNING id
+      `
+    );
+
+    expect(deletedPendingActions).toHaveLength(0);
   });
 
   test("rejects embeddings with the wrong dimension count", async () => {

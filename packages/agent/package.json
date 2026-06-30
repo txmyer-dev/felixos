@@ -18,7 +18,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@openai/agents": "^0.12.0"
+    "@felixos/auth": "workspace:*",
+    "@felixos/db": "workspace:*",
+    "@openai/agents": "^0.12.0",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

@@ -69,6 +69,14 @@ export function hashTotpCode(tenantId: string, code: string, timeStep: number): 
 }
 
 export function encryptTotpSecret(secret: string, key: Buffer, keyId: string): EncryptedSecret {
+  return encryptSecret(secret, key, keyId);
+}
+
+export function decryptTotpSecret(encrypted: EncryptedSecret, key: Buffer): string {
+  return decryptSecret(encrypted, key);
+}
+
+export function encryptSecret(secret: string, key: Buffer, keyId: string): EncryptedSecret {
   assertEncryptionKey(key);
   const nonce = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, nonce);
@@ -82,7 +90,7 @@ export function encryptTotpSecret(secret: string, key: Buffer, keyId: string): E
   };
 }
 
-export function decryptTotpSecret(encrypted: EncryptedSecret, key: Buffer): string {
+export function decryptSecret(encrypted: EncryptedSecret, key: Buffer): string {
   assertEncryptionKey(key);
   const payload = Buffer.from(encrypted.ciphertext, "base64url");
   const nonce = Buffer.from(encrypted.nonce, "base64url");
