@@ -21,6 +21,7 @@ export { runAgent } from "./runner.js";
 export type { TrustLadderOutcome, TrustLadderStore } from "./trust-ladder.js";
 export { getEffectiveRung, invokeThroughTrustLadder } from "./trust-ladder.js";
 export { defaultRegistry } from "./registry.js";
+export { isSkillNameSlug } from "@felixos/skills";
 export { DocNoteCaptureSkill } from "./skills/doc-note-capture.js";
 export { YouTubeCaptureSkill, ExternalDependencyError } from "./skills/youtube-capture.js";
 export { DraftEmailSkill } from "./skills/draft-email.js";

@@ -68,8 +68,15 @@ export async function resolveWorkflowName(
   n8nClient: N8nClient,
   workflowId: string
 ): Promise<string> {
-  const workflow = await n8nClient.getWorkflow(workflowId);
-  return workflow?.name ?? workflowId;
+  // Best-effort only: this populates a cosmetic descriptor string for the agent's
+  // tool list. n8n being unreachable must not block skill construction or, by
+  // extension, /agent/run and pending-action approval for unrelated skills.
+  try {
+    const workflow = await n8nClient.getWorkflow(workflowId);
+    return workflow?.name ?? workflowId;
+  } catch {
+    return workflowId;
+  }
 }
 
 function decryptWebhookAuth(row: TenantN8nSkillRow, ctx: SkillContext): string | undefined {

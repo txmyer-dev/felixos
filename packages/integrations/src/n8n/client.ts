@@ -57,9 +57,35 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
         signal: controller.signal
       });
 
-      if (response.status === 404) {
-        return undefined as T;
+      if (!response.ok) {
+        throw new N8nUnavailableError(`n8n request failed with status ${response.status}`);
       }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof N8nUnavailableError) throw error;
+      throw new N8nUnavailableError(error instanceof Error ? error.message : "n8n is unavailable", {
+        cause: error
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // For lookups where "not found" is an expected, typed outcome (T | undefined)
+  // rather than an error — distinct from request(), where a 404 on a mutation
+  // (activate/deactivate/retry/stop) must not silently resolve as success.
+  async function requestOptional<T>(path: string): Promise<T | undefined> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetchImpl(`${apiBaseUrl}${path}`, {
+        headers: { "X-N8N-API-KEY": config.apiKey },
+        signal: controller.signal
+      });
+
+      if (response.status === 404) return undefined;
 
       if (!response.ok) {
         throw new N8nUnavailableError(`n8n request failed with status ${response.status}`);
@@ -100,7 +126,9 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
       );
     },
     getWorkflow(id) {
-      return request<N8nWorkflow | undefined>(`/workflows/${encodeURIComponent(id)}`);
+      return cached(`workflow:${id}`, () =>
+        requestOptional<N8nWorkflow>(`/workflows/${encodeURIComponent(id)}`)
+      );
     },
     activateWorkflow(id) {
       return request<N8nWorkflow>(`/workflows/${encodeURIComponent(id)}/activate`, {
@@ -119,7 +147,7 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
       );
     },
     getExecution(id) {
-      return request<N8nExecution | undefined>(`/executions/${encodeURIComponent(id)}`);
+      return requestOptional<N8nExecution>(`/executions/${encodeURIComponent(id)}`);
     },
     retryExecution(id) {
       return request<N8nExecution>(`/executions/${encodeURIComponent(id)}/retry`, {

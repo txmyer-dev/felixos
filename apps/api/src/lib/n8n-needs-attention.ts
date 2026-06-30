@@ -2,8 +2,11 @@ import { n8nExecutionAcknowledgments, tenantN8nSkills } from "@felixos/db";
 import { inArray } from "drizzle-orm";
 
 import type { ScopedDatabaseClient } from "@felixos/db";
-import type { N8nClient, N8nExecution } from "@felixos/integrations";
+import type { N8nClient, N8nExecution, N8nExecutionStatus } from "@felixos/integrations";
 import type { N8nNeedsAttentionItem } from "@felixos/shared-types";
+
+const maxPagesPerStatus = 20;
+const pageLimit = 250;
 
 export async function listN8nNeedsAttention(opts: {
   tenantId: string;
@@ -23,10 +26,10 @@ export async function listN8nNeedsAttention(opts: {
   if (workflowIds.size === 0) return [];
 
   const [errorExecutions, crashedExecutions] = await Promise.all([
-    opts.n8nClient.listExecutions({ status: "error", limit: 100 }),
-    opts.n8nClient.listExecutions({ status: "crashed", limit: 100 })
+    fetchAllExecutions(opts.n8nClient, "error"),
+    fetchAllExecutions(opts.n8nClient, "crashed")
   ]);
-  const failed = [...errorExecutions.items, ...crashedExecutions.items].filter((execution) =>
+  const failed = [...errorExecutions, ...crashedExecutions].filter((execution) =>
     execution.workflowId ? workflowIds.has(execution.workflowId) : false
   );
   if (failed.length === 0) return [];
@@ -43,6 +46,31 @@ export async function listN8nNeedsAttention(opts: {
   return failed
     .filter((execution) => !acknowledgedIds.has(execution.id))
     .map((execution) => toNeedsAttentionItem(execution, opts.n8nClient.baseUrl));
+}
+
+// listExecutions is cursor-paginated; a single page (n8n caps `limit` at 250)
+// can silently omit older failures once a tenant's shared n8n instance has
+// accumulated more than one page of errors. Page through to completion, bounded
+// by maxPagesPerStatus so a runaway n8n instance can't make this call unbounded.
+async function fetchAllExecutions(
+  n8nClient: N8nClient,
+  status: N8nExecutionStatus
+): Promise<N8nExecution[]> {
+  const items: N8nExecution[] = [];
+  let cursor: string | undefined;
+
+  for (let page = 0; page < maxPagesPerStatus; page += 1) {
+    const result = await n8nClient.listExecutions({
+      status,
+      limit: pageLimit,
+      ...(cursor ? { cursor } : {})
+    });
+    items.push(...result.items);
+    if (!result.nextCursor) break;
+    cursor = result.nextCursor;
+  }
+
+  return items;
 }
 
 function toNeedsAttentionItem(execution: N8nExecution, baseUrl: string): N8nNeedsAttentionItem {

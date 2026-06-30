@@ -1,3 +1,4 @@
+import { defaultRegistry, isSkillNameSlug } from "@felixos/agent";
 import { encryptSecret } from "@felixos/auth";
 import { tenantN8nSkills } from "@felixos/db";
 import { and, eq } from "drizzle-orm";
@@ -49,6 +50,17 @@ export const n8nSkillRoutes: FastifyPluginAsync = async (fastify) => {
         ? encryptSecret(body.webhookAuthValue, request.server.encryptionKey, request.server.keyId)
         : undefined;
     const now = new Date();
+    // Only touch webhook-auth columns when a new value was supplied this request,
+    // so an update that omits webhookAuthValue (e.g. changing defaultRung only)
+    // does not silently wipe a previously stored credential.
+    const authUpdate = body.webhookAuthValue
+      ? {
+          webhookAuthHeader: body.webhookAuthHeader ?? null,
+          webhookAuthCiphertext: encrypted?.ciphertext ?? null,
+          webhookAuthNonce: encrypted?.nonce ?? null,
+          webhookAuthKeyId: encrypted?.keyId ?? null
+        }
+      : {};
 
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
@@ -73,10 +85,7 @@ export const n8nSkillRoutes: FastifyPluginAsync = async (fastify) => {
             set: {
               n8nWorkflowId: body.n8nWorkflowId!,
               webhookUrl: body.webhookUrl!,
-              webhookAuthHeader: body.webhookAuthHeader ?? null,
-              webhookAuthCiphertext: encrypted?.ciphertext ?? null,
-              webhookAuthNonce: encrypted?.nonce ?? null,
-              webhookAuthKeyId: encrypted?.keyId ?? null,
+              ...authUpdate,
               inputSchema: body.inputSchema ?? { type: "object" },
               defaultRung: (body.defaultRung ?? "act-and-log") as TrustRung,
               updatedAt: now
@@ -107,23 +116,33 @@ export const n8nSkillRoutes: FastifyPluginAsync = async (fastify) => {
   });
 };
 
-function validateRegistration(body: RegisterN8nSkillBody, n8nBaseUrl: string): string | undefined {
+export function validateRegistration(
+  body: RegisterN8nSkillBody,
+  n8nBaseUrl: string
+): string | undefined {
   if (!body.n8nWorkflowId?.trim()) return "n8nWorkflowId is required";
   if (!body.skillName?.trim()) return "skillName is required";
+  if (!isSkillNameSlug(body.skillName)) {
+    return "skillName must be a lowercase hyphenated slug";
+  }
+  if (defaultRegistry.get(body.skillName)) {
+    return `skillName "${body.skillName}" collides with a built-in agent skill`;
+  }
   if (!body.webhookUrl?.trim()) return "webhookUrl is required";
   if (body.webhookAuthValue && !body.webhookAuthHeader?.trim()) {
     return "webhookAuthHeader is required when webhookAuthValue is provided";
   }
-  if (body.defaultRung && !isValidRung(body.defaultRung)) {
+  if (body.defaultRung !== undefined && !isValidRung(body.defaultRung)) {
     return "defaultRung must be one of: suggest, draft-and-wait, act-and-log, full-auto";
+  }
+  if (!n8nBaseUrl) {
+    return "n8n is not configured; cannot register a workflow skill";
   }
   try {
     const url = new URL(body.webhookUrl);
     if (url.protocol !== "https:" && url.protocol !== "http:") return "webhookUrl must be http(s)";
-    if (n8nBaseUrl) {
-      const baseUrl = new URL(n8nBaseUrl);
-      if (url.origin !== baseUrl.origin) return "webhookUrl must use the configured n8n origin";
-    }
+    const baseUrl = new URL(n8nBaseUrl);
+    if (url.origin !== baseUrl.origin) return "webhookUrl must use the configured n8n origin";
     if (!url.pathname.startsWith("/webhook/") && !url.pathname.startsWith("/webhook-test/")) {
       return "webhookUrl must point to an n8n webhook path";
     }

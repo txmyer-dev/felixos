@@ -92,6 +92,45 @@ describe("n8n client", () => {
 
     await expect(client.listWorkflows()).rejects.toBeInstanceOf(N8nUnavailableError);
   });
+
+  it("getWorkflow/getExecution resolve undefined on 404 instead of throwing", async () => {
+    const client = createN8nClient({
+      baseUrl: "https://n8n.example.test",
+      apiKey: "secret",
+      cacheTtlMs: 0,
+      fetchImpl: createFetchSpy([], async () => new Response(null, { status: 404 }))
+    });
+
+    await expect(client.getWorkflow("missing")).resolves.toBeUndefined();
+    await expect(client.getExecution("missing")).resolves.toBeUndefined();
+  });
+
+  it("treats a 404 on a mutation as an error rather than a silent success", async () => {
+    const client = createN8nClient({
+      baseUrl: "https://n8n.example.test",
+      apiKey: "secret",
+      fetchImpl: createFetchSpy([], async () => new Response(null, { status: 404 }))
+    });
+
+    await expect(client.activateWorkflow("missing")).rejects.toBeInstanceOf(N8nUnavailableError);
+    await expect(client.retryExecution("missing")).rejects.toBeInstanceOf(N8nUnavailableError);
+  });
+
+  it("caches getWorkflow within the ttl window, keyed by workflow id", async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = createFetchSpy(calls, async () => jsonResponse({ id: "wf", name: "Flow" }));
+    const client = createN8nClient({
+      baseUrl: "https://n8n.example.test",
+      apiKey: "secret",
+      cacheTtlMs: 1_000,
+      fetchImpl
+    });
+
+    await client.getWorkflow("wf");
+    await client.getWorkflow("wf");
+
+    expect(calls).toHaveLength(1);
+  });
 });
 
 type FetchCall = {
