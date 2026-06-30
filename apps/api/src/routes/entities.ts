@@ -5,6 +5,10 @@ import type { FastifyPluginAsync } from "fastify";
 
 import { withRequestTenant } from "./context.js";
 
+const lifecycleStages = new Set(["prospect", "client", "former_client"] as const);
+
+type LifecycleStage = NonNullable<(typeof entities.$inferInsert)["lifecycleStage"]>;
+
 export const entityRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await withRequestTenant(request, () =>
@@ -38,6 +42,15 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
         .status(400)
         .send({ ok: false, error: { code: "bad_request", message: "name is required" } });
     }
+    if (!isLifecycleStage(lifecycleStage)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "bad_request",
+          message: "lifecycleStage must be one of: prospect, client, former_client"
+        }
+      });
+    }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
@@ -46,7 +59,7 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
             id: randomUUID(),
             tenantId: request.tenantId,
             name,
-            lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"]
+            lifecycleStage
           })
           .returning()
       )
@@ -59,17 +72,21 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { lifecycleStage?: string };
   }>("/:id", async (request, reply) => {
     const { lifecycleStage } = request.body ?? {};
-    if (!lifecycleStage) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "lifecycleStage is required" } });
+    if (!isLifecycleStage(lifecycleStage)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "bad_request",
+          message: "lifecycleStage must be one of: prospect, client, former_client"
+        }
+      });
     }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
           .update(entities)
           .set({
-            lifecycleStage: lifecycleStage as (typeof entities.$inferInsert)["lifecycleStage"],
+            lifecycleStage,
             updatedAt: new Date()
           })
           .where(eq(entities.id, request.params.id))
@@ -84,6 +101,10 @@ export const entityRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ ok: true, data: toView(row) });
   });
 };
+
+function isLifecycleStage(value: unknown): value is LifecycleStage {
+  return typeof value === "string" && lifecycleStages.has(value as LifecycleStage);
+}
 
 function toView(row: typeof entities.$inferSelect) {
   return {

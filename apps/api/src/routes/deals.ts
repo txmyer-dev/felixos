@@ -5,6 +5,10 @@ import type { FastifyPluginAsync } from "fastify";
 
 import { withRequestTenant } from "./context.js";
 
+const dealStages = new Set(["new", "qualified", "proposal", "won", "lost"] as const);
+
+type DealStage = NonNullable<(typeof deals.$inferInsert)["stage"]>;
+
 export const dealRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const rows = await withRequestTenant(request, () =>
@@ -37,6 +41,15 @@ export const dealRoutes: FastifyPluginAsync = async (fastify) => {
         error: { code: "bad_request", message: "accountId and name are required" }
       });
     }
+    if (!isDealStage(stage)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "bad_request",
+          message: "stage must be one of: new, qualified, proposal, won, lost"
+        }
+      });
+    }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
@@ -46,7 +59,7 @@ export const dealRoutes: FastifyPluginAsync = async (fastify) => {
             tenantId: request.tenantId,
             accountId,
             name,
-            stage: stage as (typeof deals.$inferInsert)["stage"],
+            stage,
             valueCents
           })
           .returning()
@@ -60,16 +73,20 @@ export const dealRoutes: FastifyPluginAsync = async (fastify) => {
     Body: { stage?: string };
   }>("/:id", async (request, reply) => {
     const { stage } = request.body ?? {};
-    if (!stage) {
-      return reply
-        .status(400)
-        .send({ ok: false, error: { code: "bad_request", message: "stage is required" } });
+    if (!isDealStage(stage)) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "bad_request",
+          message: "stage must be one of: new, qualified, proposal, won, lost"
+        }
+      });
     }
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
           .update(deals)
-          .set({ stage: stage as (typeof deals.$inferInsert)["stage"], updatedAt: new Date() })
+          .set({ stage, updatedAt: new Date() })
           .where(eq(deals.id, request.params.id))
           .returning()
       )
@@ -82,6 +99,10 @@ export const dealRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ ok: true, data: toView(row) });
   });
 };
+
+function isDealStage(value: unknown): value is DealStage {
+  return typeof value === "string" && dealStages.has(value as DealStage);
+}
 
 function toView(row: typeof deals.$inferSelect) {
   return {

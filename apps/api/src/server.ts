@@ -1,4 +1,5 @@
 import { createPrivilegedDatabaseClient, createScopedDatabaseClient } from "@felixos/db";
+import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import fp from "fastify-plugin";
 
@@ -57,6 +58,10 @@ export function buildServer(opts: {
       f.decorate("keyId", opts.keyId ?? "default");
     })
   );
+
+  fastify.register(rateLimit, {
+    global: false
+  });
 
   fastify.register(authMiddleware);
   fastify.register(tenantMiddleware);

@@ -13,7 +13,8 @@ const UNPROTECTED_PATHS = new Set(["/health", "/auth/login"]);
 
 export const authMiddleware: FastifyPluginAsync = fp(async (fastify) => {
   fastify.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (UNPROTECTED_PATHS.has(request.url)) return;
+    const pathname = request.url.split("?")[0] ?? request.url;
+    if (UNPROTECTED_PATHS.has(pathname)) return;
 
     const token = extractSessionToken(request);
     if (!token) {
