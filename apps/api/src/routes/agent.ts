@@ -1,4 +1,4 @@
-import { resolveInferenceProvider, runAgent } from "@felixos/agent";
+import { resolveInferenceProvider, runAgent, defaultRegistry } from "@felixos/agent";
 import { tenantSkillRungs, pendingActions } from "@felixos/db";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
@@ -93,11 +93,25 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    const skill = defaultRegistry.get(row.skillName);
+    const skillCtx = {
+      tenantId: request.tenantId,
+      scopedDb: request.server.scopedDb,
+      provider: {}
+    };
+
+    if (skill?.afterApproval) {
+      await withRequestTenant(request, () =>
+        skill.afterApproval!(row.payload as Parameters<typeof skill.afterApproval>[0], skillCtx)
+      );
+    }
+
+    const nextStatus = skill?.afterApproval ? "executed" : "approved";
     const [updated] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
           .update(pendingActions)
-          .set({ status: "approved", updatedAt: new Date() })
+          .set({ status: nextStatus, updatedAt: new Date() })
           .where(eq(pendingActions.id, request.params.id))
           .returning()
       )
