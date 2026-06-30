@@ -64,10 +64,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
           .select()
           .from(pendingActions)
           .where(
-            and(
-              eq(pendingActions.tenantId, request.tenantId),
-              eq(pendingActions.status, "pending")
-            )
+            and(eq(pendingActions.tenantId, request.tenantId), eq(pendingActions.status, "pending"))
           )
           .orderBy(pendingActions.createdAt)
       )
@@ -79,11 +76,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>("/pending/:id/approve", async (request, reply) => {
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
-        tx
-          .select()
-          .from(pendingActions)
-          .where(eq(pendingActions.id, request.params.id))
-          .limit(1)
+        tx.select().from(pendingActions).where(eq(pendingActions.id, request.params.id)).limit(1)
       )
     );
 
@@ -116,11 +109,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>("/pending/:id/reject", async (request, reply) => {
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
-        tx
-          .select()
-          .from(pendingActions)
-          .where(eq(pendingActions.id, request.params.id))
-          .limit(1)
+        tx.select().from(pendingActions).where(eq(pendingActions.id, request.params.id)).limit(1)
       )
     );
 
@@ -157,7 +146,10 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       if (!isValidRung(rung)) {
         return reply.status(400).send({
           ok: false,
-          error: { code: "bad_request", message: "rung must be one of: suggest, draft-and-wait, act-and-log, full-auto" }
+          error: {
+            code: "bad_request",
+            message: "rung must be one of: suggest, draft-and-wait, act-and-log, full-auto"
+          }
         });
       }
 

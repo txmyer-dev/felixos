@@ -4,7 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { KnowledgeSearchResult } from "@felixos/shared-types";
 
 export type KnowledgeSearchRow = Omit<typeof distilledItems.$inferSelect, "embedding"> & {
-  sourceType: typeof rawSources.$inferSelect["sourceType"];
+  sourceType: (typeof rawSources.$inferSelect)["sourceType"];
   sourceMetadata: Record<string, unknown>;
 };
 
@@ -17,7 +17,9 @@ export type KnowledgeSearchOptions = {
   tenantId: string;
 };
 
-export async function searchKnowledge(opts: KnowledgeSearchOptions): Promise<KnowledgeSearchResult[]> {
+export async function searchKnowledge(
+  opts: KnowledgeSearchOptions
+): Promise<KnowledgeSearchResult[]> {
   const limit = clampLimit(opts.limit);
   const vector = toVectorSql(opts.embedding);
 
