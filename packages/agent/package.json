@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./tools/knowledge-retrieval.js": {
+      "types": "./src/tools/knowledge-retrieval.ts",
+      "default": "./src/tools/knowledge-retrieval.ts"
     }
   },
   "scripts": {
@@ -20,6 +24,8 @@
   "dependencies": {
     "@felixos/auth": "workspace:*",
     "@felixos/db": "workspace:*",
+    "@felixos/shared-types": "workspace:*",
+    "@felixos/skills": "workspace:*",
     "@openai/agents": "^0.12.0",
     "drizzle-orm": "^0.45.2"
   },

@@ -6,6 +6,7 @@ import { authMiddleware } from "./middleware/auth.js";
 import { tenantMiddleware } from "./middleware/tenant.js";
 import { createEnvLlmShim } from "./lib/llm.js";
 import { agentConfigRoutes } from "./routes/agent-config.js";
+import { agentRoutes } from "./routes/agent.js";
 import { authRoutes } from "./routes/auth.js";
 import { contactRoutes } from "./routes/contacts.js";
 import { dealRoutes } from "./routes/deals.js";
@@ -64,6 +65,7 @@ export function buildServer(opts: {
 
   fastify.register(authRoutes, { prefix: "/auth" });
   fastify.register(agentConfigRoutes, { prefix: "/agent/config" });
+  fastify.register(agentRoutes, { prefix: "/agent" });
   fastify.register(entityRoutes, { prefix: "/entities" });
   fastify.register(contactRoutes, { prefix: "/contacts" });
   fastify.register(dealRoutes, { prefix: "/deals" });

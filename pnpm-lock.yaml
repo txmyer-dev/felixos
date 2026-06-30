@@ -113,6 +113,12 @@ importers:
       '@felixos/db':
         specifier: workspace:*
         version: link:../db
+      '@felixos/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@felixos/skills':
+        specifier: workspace:*
+        version: link:../skills
       '@openai/agents':
         specifier: ^0.12.0
         version: 0.12.0(ws@8.21.0)(zod@4.4.3)
