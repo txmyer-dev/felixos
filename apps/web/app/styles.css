@@ -1,17 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f7f4;
-  --foreground: #172026;
-  --surface: #ffffff;
-  --surface-muted: #d7ddd2;
-  --border: #d7ddd2;
-  --border-strong: #b9c4ba;
-  --muted: #59655b;
-  --muted-foreground: #344139;
-  --primary: #245b47;
+  color-scheme: dark;
+
+  --background: #070512;
+  --foreground: #f4f2ff;
+  --surface: #141029;
+  --surface-muted: #1c1740;
+  --border: #2a2350;
+  --border-strong: #3d3564;
+  --muted: #8b85ae;
+  --muted-foreground: #c7c2e0;
+  --primary: #7c4dff;
   --primary-foreground: #ffffff;
-  --danger: #a5382b;
+  --accent: #22c7c7;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+  --abyss: #0c0820;
 
   color: var(--foreground);
   background: var(--background);
@@ -36,26 +42,91 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-abyss: var(--abyss);
 }
 
-* {
-  box-sizing: border-box;
+/* All element defaults live in @layer base: Tailwind v4 puts utilities in
+   @layer utilities, and unlayered author CSS beats every layer regardless of
+   specificity — an unlayered `button { background: ... }` would silently
+   defeat variant classes like bg-danger on every Button component. */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
+  input,
+  textarea {
+    background: var(--abyss);
+    color: var(--foreground);
+  }
+
+  a {
+    color: inherit;
+  }
+
+  h1,
+  h2,
+  p {
+    margin-top: 0;
+  }
+
+  h1 {
+    margin-bottom: 0;
+    font-size: 1.7rem;
+  }
+
+  h2 {
+    margin-bottom: 4px;
+    font-size: 1rem;
+  }
+
+  label {
+    display: grid;
+    gap: 6px;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+  }
+
+  input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  button {
+    min-height: 42px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    cursor: pointer;
+  }
 }
 
-body {
-  margin: 0;
-  background: var(--background);
-}
-
-button,
-input,
-textarea {
-  font: inherit;
-}
-
-a {
-  color: inherit;
+/* Deliberately unlayered so the accessibility ring is not casually
+   overridden by utility classes. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  /* offset draws the ring over the page background, not the element's own
+     fill — teal fails 3:1 directly against the violet/rose fills (KTD5) */
+  outline-offset: 2px;
 }
 
 .login-shell {
@@ -80,46 +151,6 @@ a {
   color: var(--muted);
   font-size: 0.78rem;
   text-transform: uppercase;
-}
-
-h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 0;
-  font-size: 1.7rem;
-}
-
-h2 {
-  margin-bottom: 4px;
-  font-size: 1rem;
-}
-
-label {
-  display: grid;
-  gap: 6px;
-  color: var(--muted-foreground);
-  font-size: 0.9rem;
-}
-
-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 8px 10px;
-}
-
-button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  cursor: pointer;
 }
 
 .form-error {
