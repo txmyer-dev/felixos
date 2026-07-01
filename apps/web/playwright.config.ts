@@ -11,7 +11,7 @@ export default defineConfig({
   projects: [
     {
       name: "unauthenticated",
-      testMatch: /auth-gate\.spec\.ts/,
+      testMatch: /(auth-gate|theme-contrast)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: { cookies: [], origins: [] }
@@ -23,7 +23,7 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testIgnore: /auth-gate\.spec\.ts/,
+      testIgnore: /(auth-gate|theme-contrast)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "playwright/.auth/demo.json"
