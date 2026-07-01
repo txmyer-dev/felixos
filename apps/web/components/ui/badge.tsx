@@ -8,8 +8,8 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 
 const tones = {
   neutral: "border-border bg-surface text-muted-foreground",
-  success: "border-primary/30 bg-primary/10 text-primary",
-  warning: "border-border-strong bg-surface-muted text-muted-foreground",
+  success: "border-success/30 bg-success/10 text-success",
+  warning: "border-warning/30 bg-warning/10 text-warning",
   danger: "border-danger/30 bg-danger/10 text-danger"
 };
 
