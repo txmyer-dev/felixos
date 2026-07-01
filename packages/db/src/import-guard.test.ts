@@ -14,10 +14,7 @@ const forbiddenPatterns = [/createPrivilegedDatabaseClient/, /felixos_privileged
 // carry a "PRIVILEGED-BOOTSTRAP-EXCEPTION" marker comment next to the usage,
 // so this test keeps failing if the marker is ever dropped or a new,
 // undocumented usage is introduced elsewhere.
-const privilegedDbAllowlist = new Set([
-  "middleware/auth.ts",
-  "routes/auth.ts"
-]);
+const privilegedDbAllowlist = new Set(["middleware/auth.ts", "routes/auth.ts"]);
 const privilegedDbPattern = /privilegedDb/;
 const bootstrapExceptionMarker = "PRIVILEGED-BOOTSTRAP-EXCEPTION";
 
