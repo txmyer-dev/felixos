@@ -152,6 +152,7 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Knowledge API integrati
       { method: "GET", url: "/knowledge/sources" },
       { method: "POST", url: "/knowledge/sources", payload: {} },
       { method: "POST", url: `/knowledge/distill/${randomUUID()}` },
+      { method: "GET", url: "/knowledge/items" },
       { method: "GET", url: "/knowledge/search?q=stub" },
       { method: "PATCH", url: `/knowledge/items/${randomUUID()}`, payload: {} }
     ] as const) {
@@ -368,6 +369,54 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Knowledge API integrati
       payload: { status: "rejected" }
     });
     expect(patchRes.statusCode).toBe(404);
+  });
+
+  it("lists distilled items with default pending status and tenant isolation", async () => {
+    const sourceRes = await server.inject({
+      method: "POST",
+      url: "/knowledge/sources",
+      headers: { cookie: tenantACookie },
+      payload: { sourceType: "note", content: "Pending list source." }
+    });
+    expect(sourceRes.statusCode).toBe(201);
+
+    const distillRes = await server.inject({
+      method: "POST",
+      url: `/knowledge/distill/${sourceRes.json().data.id}`,
+      headers: { cookie: tenantACookie }
+    });
+    expect(distillRes.statusCode).toBe(201);
+    const item = distillRes.json().data[0];
+
+    const defaultList = await server.inject({
+      method: "GET",
+      url: "/knowledge/items",
+      headers: { cookie: tenantACookie }
+    });
+    expect(defaultList.statusCode).toBe(200);
+    expect(defaultList.json().data.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: item.id, status: "pending" })])
+    );
+
+    const tenantBList = await server.inject({
+      method: "GET",
+      url: "/knowledge/items",
+      headers: { cookie: tenantBCookie }
+    });
+    expect(tenantBList.statusCode).toBe(200);
+    expect(tenantBList.json().data.items.map((row: { id: string }) => row.id)).not.toContain(
+      item.id
+    );
+
+    const acceptedList = await server.inject({
+      method: "GET",
+      url: "/knowledge/items?status=accepted",
+      headers: { cookie: tenantACookie }
+    });
+    expect(acceptedList.statusCode).toBe(200);
+    expect(acceptedList.json().data.items.map((row: { id: string }) => row.id)).not.toContain(
+      item.id
+    );
   });
 
   it("validates request shapes", async () => {

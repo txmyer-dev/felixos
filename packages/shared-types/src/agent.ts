@@ -6,6 +6,7 @@ export type PendingActionView = {
   skillName: string;
   payload: Record<string, unknown>;
   status: PendingActionStatus;
+  targetEntityId: string | null;
   agentContext: string | null;
   createdAt: string;
   updatedAt: string;

@@ -1,11 +1,13 @@
 import { distilledItems, rawSources } from "@felixos/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import type {
   DistilledItemStatus,
   DistilledItemType,
-  KnowledgeSourceType
+  KnowledgeSourceType,
+  ListResponse,
+  DistilledItemView
 } from "@felixos/shared-types";
 import type { FastifyPluginAsync } from "fastify";
 
@@ -36,6 +38,50 @@ type SourceBody = {
 };
 
 export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get<{
+    Querystring: { status?: string; entityId?: string; limit?: string; cursor?: string };
+  }>("/items", async (request, reply) => {
+    const status = request.query.status ?? "pending";
+    if (!isDistilledItemStatus(status)) {
+      return sendBadRequest(reply, "status must be one of: pending, accepted, rejected, corrected");
+    }
+
+    const limit = clampLimit(request.query.limit);
+    const cursorDate = request.query.cursor ? new Date(request.query.cursor) : null;
+    if (cursorDate && Number.isNaN(cursorDate.valueOf())) {
+      return sendBadRequest(reply, "cursor must be an ISO timestamp");
+    }
+
+    const filters = [
+      eq(distilledItems.tenantId, request.tenantId),
+      eq(distilledItems.status, status),
+      ...(request.query.entityId ? [eq(distilledItems.entityId, request.query.entityId)] : []),
+      ...(cursorDate ? [lt(distilledItems.createdAt, cursorDate)] : [])
+    ];
+
+    const rows = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx
+          .select()
+          .from(distilledItems)
+          .where(and(...filters))
+          .orderBy(desc(distilledItems.createdAt))
+          .limit(limit + 1)
+      )
+    );
+
+    const pageRows = rows.slice(0, limit);
+    const nextCursor =
+      rows.length > limit ? (pageRows.at(-1)?.createdAt.toISOString() ?? null) : null;
+
+    const response: ListResponse<DistilledItemView> = {
+      items: pageRows.map(toDistilledItemView),
+      pageInfo: { nextCursor }
+    };
+
+    return sendSuccess(reply, response);
+  });
+
   fastify.get("/sources", async (request, reply) => {
     const rows = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>

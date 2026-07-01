@@ -31,3 +31,9 @@ Thumbs.db
 # Test / coverage
 coverage/
 *.tsbuildinfo
+apps/web/playwright/.auth/
+apps/web/playwright-report/
+apps/web/test-results/
+
+# Generated analysis output
+graphify-out/

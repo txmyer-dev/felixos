@@ -14,8 +14,9 @@
     "next-env.d.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.tsx",
     "lib/**/*.ts",
-    "middleware.ts",
+    "proxy.ts",
     "next.config.ts"
   ],
   "exclude": ["node_modules"]
