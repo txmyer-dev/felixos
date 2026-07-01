@@ -143,6 +143,7 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
   it("rejects unauthenticated agent requests", async () => {
     for (const request of [
       { method: "GET", url: "/agent/pending" },
+      { method: "PATCH", url: "/agent/pending/fake-id", payload: { text: "x" } },
       { method: "POST", url: "/agent/pending/fake-id/approve" },
       { method: "POST", url: "/agent/pending/fake-id/reject" },
       { method: "PUT", url: "/agent/rungs/draft-email", payload: { rung: "act-and-log" } }
@@ -348,6 +349,57 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
     for (const item of listRes.json().data as Array<{ status: string }>) {
       expect(item.status).toBe("pending");
     }
+  });
+
+  it("GET /agent/pending supports status filters and targetEntityId", async () => {
+    const entityRes = await server.inject({
+      method: "POST",
+      url: "/entities",
+      headers: { cookie: tenantACookie },
+      payload: { name: "Pending Target", lifecycleStage: "prospect" }
+    });
+    const accountId = entityRes.json().data.id;
+    const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
+    const ctx = { tenantId: tenantAId, scopedDb, provider: {} };
+    const createTaskSkill = defaultRegistry.get("create-task")!;
+    const outcome = await invokeThroughTrustLadder(
+      createTaskSkill,
+      { accountId, summary: "Filter target" },
+      ctx,
+      store
+    );
+    const id = "id" in outcome ? outcome.id : "";
+
+    const listRes = await server.inject({
+      method: "GET",
+      url: "/agent/pending?status=pending",
+      headers: { cookie: tenantACookie }
+    });
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json().data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id, targetEntityId: accountId })])
+    );
+  });
+
+  it("PATCH /agent/pending/:id edits pending action text", async () => {
+    const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
+    const ctx = { tenantId: tenantAId, scopedDb, provider: {} };
+    const outcome = await invokeThroughTrustLadder(
+      DraftEmailSkill,
+      { to: "edit@example.com", subject: "Edit", body: "Before" },
+      ctx,
+      store
+    );
+    const id = "id" in outcome ? outcome.id : "";
+
+    const editRes = await server.inject({
+      method: "PATCH",
+      url: `/agent/pending/${id}`,
+      headers: { cookie: tenantACookie },
+      payload: { text: "After" }
+    });
+    expect(editRes.statusCode).toBe(200);
+    expect(editRes.json().data.payload.body).toBe("After");
   });
 
   it("POST /agent/pending/:id/reject returns 404 for nonexistent id", async () => {

@@ -21,10 +21,13 @@ import {
 import { createSetGuard } from "../lib/validation.js";
 import { withRequestTenant } from "./context.js";
 import { createKnowledgeRetrievalTool } from "@felixos/agent/tools/knowledge-retrieval.js";
-import type { TrustRung } from "@felixos/shared-types";
+import type { PendingActionStatus, TrustRung } from "@felixos/shared-types";
 
 const isValidRung = createSetGuard<TrustRung>(
   new Set<TrustRung>(["suggest", "draft-and-wait", "act-and-log", "full-auto"])
+);
+const isPendingActionStatus = createSetGuard<PendingActionStatus>(
+  new Set<PendingActionStatus>(["pending", "approved", "rejected", "executed", "failed"])
 );
 
 type AgentRunBody = {
@@ -110,20 +113,65 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     return sendSuccess(reply, { response: result.response, pendingActionIds });
   });
 
-  fastify.get("/pending", async (request, reply) => {
+  fastify.get<{ Querystring: { status?: string } }>("/pending", async (request, reply) => {
+    const status = request.query.status ?? "pending";
+    if (!isPendingActionStatus(status)) {
+      return sendBadRequest(
+        reply,
+        "status must be one of: pending, approved, rejected, executed, failed"
+      );
+    }
+
     const rows = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
           .select()
           .from(pendingActions)
           .where(
-            and(eq(pendingActions.tenantId, request.tenantId), eq(pendingActions.status, "pending"))
+            and(eq(pendingActions.tenantId, request.tenantId), eq(pendingActions.status, status))
           )
           .orderBy(pendingActions.createdAt)
       )
     );
 
     return sendSuccess(reply, rows.map(toPendingActionView));
+  });
+
+  fastify.patch<{
+    Params: { id: string };
+    Body: { text?: string };
+  }>("/pending/:id", async (request, reply) => {
+    const text = request.body?.text?.trim();
+    if (!text) {
+      return sendBadRequest(reply, "text is required");
+    }
+
+    const [row] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx.select().from(pendingActions).where(eq(pendingActions.id, request.params.id)).limit(1)
+      )
+    );
+
+    if (!row) {
+      return sendNotFound(reply, "Pending action not found");
+    }
+
+    if (row.status !== "pending") {
+      return sendConflict(reply, `Action already ${row.status}`);
+    }
+
+    const payload = editPrimaryPayloadText(row.payload, text);
+    const [updated] = await withRequestTenant(request, () =>
+      request.server.scopedDb.transaction((tx) =>
+        tx
+          .update(pendingActions)
+          .set({ payload, updatedAt: new Date() })
+          .where(eq(pendingActions.id, request.params.id))
+          .returning()
+      )
+    );
+
+    return sendSuccess(reply, toPendingActionView(updated!));
   });
 
   fastify.post<{ Params: { id: string } }>("/pending/:id/approve", async (request, reply) => {
@@ -251,8 +299,30 @@ function toPendingActionView(row: typeof pendingActions.$inferSelect) {
     skillName: row.skillName,
     payload: row.payload,
     status: row.status,
+    targetEntityId: resolveTargetEntityId(row.payload),
     agentContext: row.agentContext,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
+}
+
+function resolveTargetEntityId(payload: Record<string, unknown>): string | null {
+  const candidate = payload.entityId ?? payload.accountId;
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
+}
+
+function editPrimaryPayloadText(
+  payload: Record<string, unknown>,
+  text: string
+): Record<string, unknown> {
+  if (typeof payload.body === "string") {
+    return { ...payload, body: text };
+  }
+  if (typeof payload.summary === "string") {
+    return { ...payload, summary: text };
+  }
+  if (typeof payload.content === "string") {
+    return { ...payload, content: text };
+  }
+  return { ...payload, content: text };
 }

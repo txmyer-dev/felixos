@@ -6,17 +6,26 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "lint": "eslint \"app/**/*.{ts,tsx}\" \"lib/**/*.ts\" \"middleware.ts\" \"next.config.ts\"",
-    "test": "vitest run",
+    "lint": "eslint \"app/**/*.{ts,tsx}\" \"components/**/*.tsx\" \"lib/**/*.ts\" \"proxy.ts\" \"next.config.ts\"",
+    "test:e2e": "playwright test",
+    "test": "vitest run lib",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@felixos/shared-types": "workspace:*",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@tanstack/react-table": "^8.21.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "next": "^16.2.9",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.17"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
