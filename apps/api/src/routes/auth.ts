@@ -26,6 +26,11 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         return sendBadRequest(reply, "tenantSlug is required");
       }
 
+      // PRIVILEGED-BOOTSTRAP-EXCEPTION: resolving a tenant slug to its id is the
+      // one lookup that must happen before any tenant context exists, so the
+      // ALS-scoped client (which requires a tenant to already be set) can't do
+      // it. This is the only sanctioned use of privilegedDb inside
+      // apps/api/src/routes; see packages/db/src/import-guard.test.ts.
       const [tenant] = await request.server.privilegedDb.db
         .select({ id: tenants.id })
         .from(tenants)

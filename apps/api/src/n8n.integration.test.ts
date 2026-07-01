@@ -214,6 +214,30 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
 
     const tenantB = await provisionAndLogin("n8n-b");
     tenantBCookie = tenantB.cookie;
+
+    // Registering wf-a/wf-b against their owning tenants up front lets every
+    // test below rely on the workflow/execution proxy routes being scoped to
+    // the calling tenant's registered n8n workflows.
+    await server.inject({
+      method: "POST",
+      url: "/n8n/skills",
+      headers: { cookie: tenantACookie },
+      payload: {
+        n8nWorkflowId: "wf-a",
+        skillName: "tenant-a-primary",
+        webhookUrl: "https://n8n.example.test/webhook/tenant-a-primary"
+      }
+    });
+    await server.inject({
+      method: "POST",
+      url: "/n8n/skills",
+      headers: { cookie: tenantBCookie },
+      payload: {
+        n8nWorkflowId: "wf-b",
+        skillName: "tenant-b-primary",
+        webhookUrl: "https://n8n.example.test/webhook/tenant-b-primary"
+      }
+    });
   });
 
   afterAll(async () => {
@@ -239,14 +263,15 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
     }
   });
 
-  it("proxies management workflow and execution filters", async () => {
+  it("proxies management workflow and execution filters, scoped to the tenant's own workflows", async () => {
     const workflows = await server.inject({
       method: "GET",
       url: "/n8n/workflows?active=true&name=Tenant&limit=2",
       headers: { cookie: tenantACookie }
     });
     expect(workflows.statusCode).toBe(200);
-    expect(workflows.json().data.items).toHaveLength(2);
+    expect(workflows.json().data.items).toHaveLength(1);
+    expect(workflows.json().data.items[0].id).toBe("wf-a");
 
     const executions = await server.inject({
       method: "GET",
@@ -278,6 +303,38 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
       headers: { cookie: tenantACookie }
     });
     expect(execution.statusCode).toBe(404);
+  });
+
+  it("does not leak another tenant's n8n workflows or executions through the proxy routes", async () => {
+    const workflowsAsB = await server.inject({
+      method: "GET",
+      url: "/n8n/workflows",
+      headers: { cookie: tenantBCookie }
+    });
+    expect(workflowsAsB.json().data.items.map((row: { id: string }) => row.id)).toEqual(["wf-b"]);
+
+    const crossTenantWorkflow = await server.inject({
+      method: "GET",
+      url: "/n8n/workflows/wf-a",
+      headers: { cookie: tenantBCookie }
+    });
+    expect(crossTenantWorkflow.statusCode).toBe(404);
+
+    const executionsAsB = await server.inject({
+      method: "GET",
+      url: "/n8n/executions",
+      headers: { cookie: tenantBCookie }
+    });
+    expect(executionsAsB.json().data.items.map((row: { id: string }) => row.id)).toEqual([
+      "ex-b-error"
+    ]);
+
+    const crossTenantExecution = await server.inject({
+      method: "GET",
+      url: "/n8n/executions/ex-a-error",
+      headers: { cookie: tenantBCookie }
+    });
+    expect(crossTenantExecution.statusCode).toBe(404);
   });
 
   it("registers tenant-scoped workflow skills without returning webhook auth plaintext", async () => {
@@ -317,7 +374,9 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
       url: "/n8n/skills",
       headers: { cookie: tenantBCookie }
     });
-    expect(tenantBList.json().data).toEqual([]);
+    expect(
+      tenantBList.json().data.map((row: { skillName: string }) => row.skillName)
+    ).not.toContain("sync-psa");
   });
 
   it("invokes n8n workflow skills through act-and-log and draft-and-wait", async () => {

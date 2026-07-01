@@ -6,6 +6,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { N8nExecutionListFilters, N8nWorkflowListFilters } from "@felixos/integrations";
 
 import { listN8nNeedsAttention } from "../lib/n8n-needs-attention.js";
+import { getTenantN8nWorkflowIds } from "../lib/n8n-tenant-scope.js";
 import { sendError, sendNotFound, sendSuccess } from "../lib/responses.js";
 import { clampLimit } from "../lib/validation.js";
 import { withRequestTenant } from "./context.js";
@@ -28,15 +29,30 @@ type ExecutionQuery = {
 };
 
 export const n8nRoutes: FastifyPluginAsync = async (fastify) => {
+  // n8n has no concept of tenants, so every list/get below is filtered against
+  // tenantN8nSkills (the tenant's registered workflow ids) to keep one tenant
+  // from reading another tenant's workflows or executions.
   fastify.get<{ Querystring: WorkflowQuery }>("/workflows", async (request, reply) =>
     withN8nErrorHandling(reply, async () => {
+      const workflowIds = await withRequestTenant(request, () =>
+        getTenantN8nWorkflowIds(request.server.scopedDb)
+      );
       const result = await request.server.n8n.listWorkflows(toWorkflowFilters(request.query));
-      return sendSuccess(reply, result);
+      return sendSuccess(reply, {
+        ...result,
+        items: result.items.filter((workflow) => workflowIds.has(workflow.id))
+      });
     })
   );
 
   fastify.get<{ Params: { id: string } }>("/workflows/:id", async (request, reply) =>
     withN8nErrorHandling(reply, async () => {
+      const workflowIds = await withRequestTenant(request, () =>
+        getTenantN8nWorkflowIds(request.server.scopedDb)
+      );
+      if (!workflowIds.has(request.params.id)) {
+        return sendNotFound(reply, "n8n workflow not found");
+      }
       const workflow = await request.server.n8n.getWorkflow(request.params.id);
       if (!workflow) return sendNotFound(reply, "n8n workflow not found");
       return sendSuccess(reply, workflow);
@@ -45,15 +61,31 @@ export const n8nRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get<{ Querystring: ExecutionQuery }>("/executions", async (request, reply) =>
     withN8nErrorHandling(reply, async () => {
+      const workflowIds = await withRequestTenant(request, () =>
+        getTenantN8nWorkflowIds(request.server.scopedDb)
+      );
+      if (request.query.workflowId && !workflowIds.has(request.query.workflowId)) {
+        return sendSuccess(reply, { items: [], nextCursor: null });
+      }
       const result = await request.server.n8n.listExecutions(toExecutionFilters(request.query));
-      return sendSuccess(reply, result);
+      return sendSuccess(reply, {
+        ...result,
+        items: result.items.filter((execution) =>
+          execution.workflowId ? workflowIds.has(execution.workflowId) : false
+        )
+      });
     })
   );
 
   fastify.get<{ Params: { id: string } }>("/executions/:id", async (request, reply) =>
     withN8nErrorHandling(reply, async () => {
+      const workflowIds = await withRequestTenant(request, () =>
+        getTenantN8nWorkflowIds(request.server.scopedDb)
+      );
       const execution = await request.server.n8n.getExecution(request.params.id);
-      if (!execution) return sendNotFound(reply, "n8n execution not found");
+      if (!execution?.workflowId || !workflowIds.has(execution.workflowId)) {
+        return sendNotFound(reply, "n8n execution not found");
+      }
       return sendSuccess(reply, execution);
     })
   );

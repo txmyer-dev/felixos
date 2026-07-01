@@ -4,14 +4,15 @@ import { resolveTenantSlug } from "./tenant";
 
 describe("tenant slug resolution", () => {
   test("resolves tenant slugs from subdomains", () => {
-    expect(resolveTenantSlug("acme.felixos.test", "/login")).toBe("acme");
+    expect(resolveTenantSlug("acme.felixos.test")).toBe("acme");
   });
 
-  test("falls back to the first path segment on localhost", () => {
-    expect(resolveTenantSlug("localhost:3000", "/demo/login")).toBe("demo");
+  test("falls back to the default tenant slug on localhost, regardless of path", () => {
+    expect(resolveTenantSlug("localhost:3000")).toBe("demo");
   });
 
-  test("uses the same fallback for unknown pre-auth tenants", () => {
-    expect(resolveTenantSlug("localhost:3000", "/missing/login")).toBe("missing");
+  test("falls back to the default tenant slug for excluded hosts", () => {
+    expect(resolveTenantSlug("www.felixos.test")).toBe("demo");
+    expect(resolveTenantSlug("felixos.test")).toBe("demo");
   });
 });

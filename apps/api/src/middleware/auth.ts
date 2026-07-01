@@ -23,6 +23,11 @@ export const authMiddleware: FastifyPluginAsync = fp(async (fastify) => {
       return sendUnauthorized(reply, "Authentication required");
     }
 
+    // PRIVILEGED-BOOTSTRAP-EXCEPTION: the tenant is not known yet at this point
+    // in the request (that's what this lookup determines), so the normal
+    // ALS-scoped client can't be used here — it refuses to run any query
+    // without a tenant already set. This is the only sanctioned use of
+    // privilegedDb inside apps/api/src/middleware; see packages/db/src/import-guard.test.ts.
     const payload = await validateSession(request.server.privilegedDb, token);
     if (!payload) {
       return sendUnauthorized(reply, "Authentication required");

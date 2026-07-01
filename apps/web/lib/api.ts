@@ -7,6 +7,16 @@ import type { Account, ApiResult } from "@felixos/shared-types";
 
 const apiOrigin = process.env.FELIXOS_API_ORIGIN ?? "http://localhost:3001";
 
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const cookieStore = await cookies();
   const headers = new Headers(init.headers);
@@ -25,7 +35,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     redirect("/login");
   }
   if (!response.ok) {
-    throw new Error(`FelixOS API request failed: ${response.status} ${response.statusText}`);
+    throw new ApiError(
+      response.status,
+      `FelixOS API request failed: ${response.status} ${response.statusText}`
+    );
   }
 
   const result = (await response.json()) as ApiResult<T>;

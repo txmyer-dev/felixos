@@ -1,25 +1,18 @@
-import { n8nExecutionAcknowledgments, tenantN8nSkills } from "@felixos/db";
+import { n8nExecutionAcknowledgments } from "@felixos/db";
 import { inArray } from "drizzle-orm";
 
 import type { ScopedDatabaseClient } from "@felixos/db";
 import type { N8nClient, N8nExecution } from "@felixos/integrations";
 import type { N8nNeedsAttentionItem } from "@felixos/shared-types";
 
+import { getTenantN8nWorkflowIds } from "./n8n-tenant-scope.js";
+
 export async function listN8nNeedsAttention(opts: {
   tenantId: string;
   scopedDb: ScopedDatabaseClient;
   n8nClient: N8nClient;
 }): Promise<N8nNeedsAttentionItem[]> {
-  const registrations = await opts.scopedDb.transaction((tx) =>
-    tx
-      .select({
-        n8nWorkflowId: tenantN8nSkills.n8nWorkflowId,
-        skillName: tenantN8nSkills.skillName
-      })
-      .from(tenantN8nSkills)
-  );
-
-  const workflowIds = new Set(registrations.map((row) => row.n8nWorkflowId));
+  const workflowIds = await getTenantN8nWorkflowIds(opts.scopedDb);
   if (workflowIds.size === 0) return [];
 
   const [errorExecutions, crashedExecutions] = await Promise.all([

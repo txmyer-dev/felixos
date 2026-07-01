@@ -11,15 +11,20 @@ import {
   TableHeader,
   TableRow
 } from "../../../../components/ui/table";
+import { ApiError } from "../../../../lib/api";
 import { fetchAccountDetail } from "../../../../lib/entities";
+import type { AccountDetail } from "../../../../lib/entities";
 
 export default async function AccountDrillInPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let detail;
+  let detail: AccountDetail;
   try {
     detail = await fetchAccountDetail(id);
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    throw error;
   }
 
   return (
