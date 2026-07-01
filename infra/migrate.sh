@@ -9,17 +9,39 @@ export PGPORT=5432
 export PGDATABASE="$POSTGRES_DB"
 export PGUSER="$POSTGRES_USER"
 
-# Apply migration files in lexicographic order.
+# Track applied files because this service runs on every docker compose start
+# against a persistent volume; replaying non-idempotent DDL would brick restart.
+psql -v ON_ERROR_STOP=1 <<'EOSQL'
+CREATE TABLE IF NOT EXISTS felixos_schema_migrations (
+  filename text PRIMARY KEY,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
+EOSQL
+
+# Apply new migration files in lexicographic order.
 # The [ -e ] guard handles the POSIX-sh no-nullglob case: when /migrations/
 # is empty, the glob expands to the literal string "*.sql"; -e rejects it.
 count=0
+skipped=0
 for f in /migrations/*.sql; do
   [ -e "$f" ] || break
-  echo "Applying $f"
-  psql -f "$f"
+  name=${f##*/}
+  if psql -v ON_ERROR_STOP=1 -v migration="$name" -AtX <<'EOSQL' | grep -q 1; then
+SELECT 1 FROM felixos_schema_migrations WHERE filename = :'migration' LIMIT 1;
+EOSQL
+    echo "Skipping already-applied migration $name"
+    skipped=$((skipped + 1))
+    continue
+  fi
+
+  echo "Applying $name"
+  psql -v ON_ERROR_STOP=1 -f "$f"
+  psql -v ON_ERROR_STOP=1 -v migration="$name" <<'EOSQL'
+INSERT INTO felixos_schema_migrations (filename) VALUES (:'migration');
+EOSQL
   count=$((count + 1))
 done
-echo "Applied $count migration(s)"
+echo "Applied $count migration(s), skipped $skipped already-applied migration(s)"
 
 # Provision a login user that inherits from a given group role.
 # Values reach SQL via psql -v substitution (outside dollar-quoting) then

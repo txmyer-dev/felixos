@@ -21,9 +21,14 @@ COPY packages/db/src ./packages/db/src
 COPY packages/auth/src ./packages/auth/src
 COPY apps/web/next.config.ts ./apps/web/
 COPY apps/web/tsconfig.json ./apps/web/
+COPY apps/web/postcss.config.mjs ./apps/web/
+COPY apps/web/components.json ./apps/web/
 COPY apps/web/app ./apps/web/app
+COPY apps/web/components ./apps/web/components
 COPY apps/web/lib ./apps/web/lib
-COPY apps/web/middleware.ts ./apps/web/
+# Next.js 16 uses proxy.ts for the auth gate; keep Docker in lockstep with App Router conventions.
+COPY apps/web/proxy.ts ./apps/web/
+COPY apps/web/public ./apps/web/public
 WORKDIR /app/apps/web
 RUN pnpm build
 

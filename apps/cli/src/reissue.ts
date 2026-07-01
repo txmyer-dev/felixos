@@ -3,7 +3,8 @@ import { readTotpEncryptionKey, reissueTenantEnrollment } from "@felixos/auth";
 
 export async function reissueTenantSecretFromCli(argv = process.argv): Promise<void> {
   const tenantSlug = readFlag(argv, "--tenant");
-  const databaseUrl = process.env.PRIVILEGED_DATABASE_URL;
+  // Prefer the repo-wide env name; keep the old CLI-only name as a compatibility fallback.
+  const databaseUrl = process.env.DATABASE_PRIVILEGED_URL ?? process.env.PRIVILEGED_DATABASE_URL;
   const keyId = process.env.TOTP_SECRET_KEY_ID ?? "local";
   const encryptionKey = readTotpEncryptionKey(process.env.TOTP_SECRET_ENCRYPTION_KEY);
 
@@ -12,7 +13,7 @@ export async function reissueTenantSecretFromCli(argv = process.argv): Promise<v
   }
 
   if (!databaseUrl) {
-    throw new Error("PRIVILEGED_DATABASE_URL is required");
+    throw new Error("DATABASE_PRIVILEGED_URL is required");
   }
 
   const client = createPrivilegedDatabaseClient(databaseUrl);

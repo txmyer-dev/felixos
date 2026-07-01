@@ -65,3 +65,9 @@ jobs:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
           DATABASE_PRIVILEGED_URL: ${{ env.TEST_DATABASE_URL }}
           TOTP_SECRET_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+
+      - name: Docker build gate
+        run: |
+          # Deployment images have explicit workspace staging; build them in CI so stale COPY lists fail fast.
+          docker build -f apps/api/Dockerfile .
+          docker build -f apps/web/Dockerfile .
