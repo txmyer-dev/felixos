@@ -49,39 +49,84 @@
   --color-abyss: var(--abyss);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--background);
-}
-
-button,
-input,
-textarea {
-  font: inherit;
-}
-
-/* @layer base so utility classes (e.g. bg-background) still win the cascade */
+/* All element defaults live in @layer base: Tailwind v4 puts utilities in
+   @layer utilities, and unlayered author CSS beats every layer regardless of
+   specificity — an unlayered `button { background: ... }` would silently
+   defeat variant classes like bg-danger on every Button component. */
 @layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
   input,
   textarea {
     background: var(--abyss);
     color: var(--foreground);
   }
+
+  a {
+    color: inherit;
+  }
+
+  h1,
+  h2,
+  p {
+    margin-top: 0;
+  }
+
+  h1 {
+    margin-bottom: 0;
+    font-size: 1.7rem;
+  }
+
+  h2 {
+    margin-bottom: 4px;
+    font-size: 1rem;
+  }
+
+  label {
+    display: grid;
+    gap: 6px;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+  }
+
+  input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  button {
+    min-height: 42px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    cursor: pointer;
+  }
 }
 
+/* Deliberately unlayered so the accessibility ring is not casually
+   overridden by utility classes. */
 :focus-visible {
   outline: 2px solid var(--accent);
   /* offset draws the ring over the page background, not the element's own
      fill — teal fails 3:1 directly against the violet/rose fills (KTD5) */
   outline-offset: 2px;
-}
-
-a {
-  color: inherit;
 }
 
 .login-shell {
@@ -106,46 +151,6 @@ a {
   color: var(--muted);
   font-size: 0.78rem;
   text-transform: uppercase;
-}
-
-h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 0;
-  font-size: 1.7rem;
-}
-
-h2 {
-  margin-bottom: 4px;
-  font-size: 1rem;
-}
-
-label {
-  display: grid;
-  gap: 6px;
-  color: var(--muted-foreground);
-  font-size: 0.9rem;
-}
-
-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 8px 10px;
-}
-
-button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  cursor: pointer;
 }
 
 .form-error {
