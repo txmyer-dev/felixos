@@ -31,7 +31,8 @@ export const pendingActionStatusEnum = pgEnum("pending_action_status", [
   "approved",
   "rejected",
   "executed",
-  "failed"
+  "failed",
+  "reversed"
 ]);
 
 export const tenantInferenceConfigs = pgTable(
@@ -80,6 +81,9 @@ export const pendingActions = pgTable(
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
     status: pendingActionStatusEnum("status").notNull().default("pending"),
     agentContext: text("agent_context"),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    reversal: jsonb("reversal").$type<Record<string, unknown>>(),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },

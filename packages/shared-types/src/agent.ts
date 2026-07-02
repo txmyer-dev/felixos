@@ -1,4 +1,5 @@
-export type PendingActionStatus = "pending" | "approved" | "rejected" | "executed" | "failed";
+export type PendingActionStatus =
+  "pending" | "approved" | "rejected" | "executed" | "failed" | "reversed";
 
 export type PendingActionView = {
   id: string;
@@ -8,6 +9,7 @@ export type PendingActionView = {
   status: PendingActionStatus;
   targetEntityId: string | null;
   agentContext: string | null;
+  reversedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

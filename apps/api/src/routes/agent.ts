@@ -301,6 +301,7 @@ function toPendingActionView(row: typeof pendingActions.$inferSelect) {
     status: row.status,
     targetEntityId: resolveTargetEntityId(row.payload),
     agentContext: row.agentContext,
+    reversedAt: row.reversedAt ? row.reversedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
