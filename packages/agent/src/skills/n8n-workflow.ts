@@ -68,8 +68,12 @@ export async function resolveWorkflowName(
   n8nClient: N8nClient,
   workflowId: string
 ): Promise<string> {
-  const workflow = await n8nClient.getWorkflow(workflowId);
-  return workflow?.name ?? workflowId;
+  try {
+    const workflow = await n8nClient.getWorkflow(workflowId);
+    return workflow?.name ?? workflowId;
+  } catch {
+    return workflowId;
+  }
 }
 
 function decryptWebhookAuth(row: TenantN8nSkillRow, ctx: SkillContext): string | undefined {

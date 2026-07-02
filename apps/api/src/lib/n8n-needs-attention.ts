@@ -7,6 +7,9 @@ import type { N8nNeedsAttentionItem } from "@felixos/shared-types";
 
 import { getTenantN8nWorkflowIds } from "./n8n-tenant-scope.js";
 
+const pageLimit = 100;
+const maxPagesPerStatus = 100;
+
 export async function listN8nNeedsAttention(opts: {
   tenantId: string;
   scopedDb: ScopedDatabaseClient;
@@ -16,10 +19,10 @@ export async function listN8nNeedsAttention(opts: {
   if (workflowIds.size === 0) return [];
 
   const [errorExecutions, crashedExecutions] = await Promise.all([
-    opts.n8nClient.listExecutions({ status: "error", limit: 100 }),
-    opts.n8nClient.listExecutions({ status: "crashed", limit: 100 })
+    listAllFailedExecutions(opts.n8nClient, "error"),
+    listAllFailedExecutions(opts.n8nClient, "crashed")
   ]);
-  const failed = [...errorExecutions.items, ...crashedExecutions.items].filter((execution) =>
+  const failed = [...errorExecutions, ...crashedExecutions].filter((execution) =>
     execution.workflowId ? workflowIds.has(execution.workflowId) : false
   );
   if (failed.length === 0) return [];
@@ -36,6 +39,27 @@ export async function listN8nNeedsAttention(opts: {
   return failed
     .filter((execution) => !acknowledgedIds.has(execution.id))
     .map((execution) => toNeedsAttentionItem(execution, opts.n8nClient.baseUrl));
+}
+
+async function listAllFailedExecutions(
+  n8nClient: N8nClient,
+  status: "error" | "crashed"
+): Promise<N8nExecution[]> {
+  const executions: N8nExecution[] = [];
+  let cursor: string | undefined;
+
+  for (let page = 0; page < maxPagesPerStatus; page += 1) {
+    const result = await n8nClient.listExecutions({
+      status,
+      limit: pageLimit,
+      ...(cursor ? { cursor } : {})
+    });
+    executions.push(...result.items);
+    if (!result.nextCursor) return executions;
+    cursor = result.nextCursor;
+  }
+
+  return executions;
 }
 
 function toNeedsAttentionItem(execution: N8nExecution, baseUrl: string): N8nNeedsAttentionItem {

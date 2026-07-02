@@ -50,6 +50,9 @@ importers:
       '@felixos/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@felixos/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)

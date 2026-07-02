@@ -109,6 +109,22 @@ function createStubN8n(calls: N8nCall[] = []): N8nClient {
     async listExecutions(filters) {
       calls.push({ method: "listExecutions", filters });
       const status = filters?.status;
+      const cursor = filters?.cursor;
+      if (status === "error" && cursor === "error-page-2") {
+        return {
+          items: [
+            {
+              id: "ex-a-error-page-2",
+              workflowId: "wf-a",
+              workflowName: "Tenant A workflow",
+              status: "error" as const,
+              stoppedAt: "2026-06-30T12:10:00.000Z",
+              error: { message: "A later failure" }
+            }
+          ],
+          nextCursor: null
+        };
+      }
       const items = [
         {
           id: "ex-a-error",
@@ -129,7 +145,7 @@ function createStubN8n(calls: N8nCall[] = []): N8nClient {
       ];
       return {
         items: status === "crashed" ? [] : items,
-        nextCursor: null
+        nextCursor: status === "error" ? "error-page-2" : null
       };
     },
     async getExecution(id) {
@@ -379,6 +395,135 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
     ).not.toContain("sync-psa");
   });
 
+  it("rejects unsafe or invalid workflow-skill registrations before writing them", async () => {
+    const cases = [
+      {
+        payload: {
+          n8nWorkflowId: "wf-a",
+          skillName: "off-origin",
+          webhookUrl: "https://metadata.example.test/webhook/off-origin"
+        },
+        message: "webhookUrl must use the configured n8n origin"
+      },
+      {
+        payload: {
+          n8nWorkflowId: "wf-a",
+          skillName: "bad_name",
+          webhookUrl: "https://n8n.example.test/webhook/bad-name"
+        },
+        message: "skillName must be a lowercase hyphenated slug"
+      },
+      {
+        payload: {
+          n8nWorkflowId: "wf-a",
+          skillName: "draft-email",
+          webhookUrl: "https://n8n.example.test/webhook/draft-email"
+        },
+        message: "skillName collides with a built-in skill"
+      },
+      {
+        payload: {
+          n8nWorkflowId: "wf-a",
+          skillName: "empty-rung",
+          webhookUrl: "https://n8n.example.test/webhook/empty-rung",
+          defaultRung: ""
+        },
+        message: "defaultRung must be one of"
+      }
+    ];
+
+    for (const testCase of cases) {
+      const res = await server.inject({
+        method: "POST",
+        url: "/n8n/skills",
+        headers: { cookie: tenantACookie },
+        payload: testCase.payload
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.message).toContain(testCase.message);
+    }
+  });
+
+  it("rejects workflow-skill registration when n8n is unconfigured", async () => {
+    const unconfiguredServer = buildServer({
+      databaseUrl: scopedSchemaUrl,
+      privilegedDatabaseUrl: privilegedSchemaUrl,
+      encryptionKey,
+      llm: createStubLlm(),
+      n8n: {
+        ...n8n,
+        baseUrl: ""
+      },
+      logger: false
+    });
+    await unconfiguredServer.ready();
+
+    const res = await unconfiguredServer.inject({
+      method: "POST",
+      url: "/n8n/skills",
+      headers: { cookie: tenantACookie },
+      payload: {
+        n8nWorkflowId: "wf-a",
+        skillName: "unconfigured",
+        webhookUrl: "https://metadata.example.test/webhook/unconfigured"
+      }
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toBe("n8n is not configured");
+
+    await unconfiguredServer.close();
+  });
+
+  it("preserves encrypted webhook auth when updating a skill without a new secret", async () => {
+    const update = await server.inject({
+      method: "POST",
+      url: "/n8n/skills",
+      headers: { cookie: tenantACookie },
+      payload: {
+        n8nWorkflowId: "wf-a",
+        skillName: "sync-psa",
+        webhookUrl: "https://n8n.example.test/webhook/sync-psa-updated",
+        defaultRung: "act-and-log"
+      }
+    });
+    expect(update.statusCode).toBe(201);
+
+    webhookCalls = [];
+    const skills = await createN8nWorkflowSkills({
+      tenantId: tenantAId,
+      scopedDb,
+      n8nClient: n8n,
+      fetchImpl: webhookFetch
+    });
+    const skill = skills.find((candidate) => candidate.descriptor.name === "sync-psa");
+    expect(skill).toBeDefined();
+
+    const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
+    const ctx = { tenantId: tenantAId, scopedDb, provider: {}, encryptionKey };
+    await invokeThroughTrustLadder(skill!, { accountId: "account-a" }, ctx, store);
+
+    expect(webhookCalls).toHaveLength(1);
+    expect(webhookCalls[0]!.headers.get("X-Workflow-Token")).toBe("super-secret");
+  });
+
+  it("builds n8n workflow skills when workflow-name lookup is unavailable", async () => {
+    const skills = await createN8nWorkflowSkills({
+      tenantId: tenantAId,
+      scopedDb,
+      n8nClient: {
+        ...n8n,
+        async getWorkflow() {
+          throw new N8nUnavailableError("n8n unavailable");
+        }
+      },
+      fetchImpl: webhookFetch
+    });
+
+    const skill = skills.find((candidate) => candidate.descriptor.name === "sync-psa");
+    expect(skill).toBeDefined();
+    expect(skill!.descriptor.purpose).toContain("wf-a");
+  });
+
   it("invokes n8n workflow skills through act-and-log and draft-and-wait", async () => {
     webhookCalls = [];
 
@@ -456,6 +601,13 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
         executionId: "ex-a-error",
         errorSummary: "A failed",
         n8nUrl: "https://n8n.example.test/execution/ex-a-error"
+      }),
+      expect.objectContaining({
+        workflowName: "Tenant A workflow",
+        n8nWorkflowId: "wf-a",
+        executionId: "ex-a-error-page-2",
+        errorSummary: "A later failure",
+        n8nUrl: "https://n8n.example.test/execution/ex-a-error-page-2"
       })
     ]);
 
@@ -480,7 +632,9 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("n8n phase integration",
       url: "/n8n/needs-attention",
       headers: { cookie: tenantACookie }
     });
-    expect(afterAck.json().data).toEqual([]);
+    expect(afterAck.json().data.map((item: { executionId: string }) => item.executionId)).toEqual([
+      "ex-a-error-page-2"
+    ]);
 
     const tenantBNeeds = await server.inject({
       method: "GET",
