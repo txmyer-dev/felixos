@@ -83,6 +83,40 @@ describe("n8n client", () => {
     ]);
   });
 
+  it("throws on 404 from mutation endpoints while optional reads return undefined", async () => {
+    const client = createN8nClient({
+      baseUrl: "https://n8n.example.test",
+      apiKey: "secret",
+      fetchImpl: createFetchSpy([], async () => jsonResponse({ message: "missing" }, 404))
+    });
+
+    await expect(client.getWorkflow("missing")).resolves.toBeUndefined();
+    await expect(client.getExecution("missing")).resolves.toBeUndefined();
+    await expect(client.activateWorkflow("missing")).rejects.toBeInstanceOf(N8nUnavailableError);
+    await expect(client.deactivateWorkflow("missing")).rejects.toBeInstanceOf(N8nUnavailableError);
+    await expect(client.retryExecution("missing")).rejects.toBeInstanceOf(N8nUnavailableError);
+    await expect(client.stopExecution("missing")).rejects.toBeInstanceOf(N8nUnavailableError);
+  });
+
+  it("caches workflow detail lookups within the ttl", async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = createFetchSpy(calls, async () =>
+      jsonResponse({ id: "wf", name: "Cached flow", active: true })
+    );
+    const client = createN8nClient({
+      baseUrl: "https://n8n.example.test",
+      apiKey: "secret",
+      cacheTtlMs: 1_000,
+      fetchImpl
+    });
+
+    await client.getWorkflow("wf");
+    await client.getWorkflow("wf");
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.input).toBe("https://n8n.example.test/api/v1/workflows/wf");
+  });
+
   it("wraps non-2xx responses", async () => {
     const client = createN8nClient({
       baseUrl: "https://n8n.example.test",

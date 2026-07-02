@@ -16,6 +16,7 @@
     "@felixos/auth": "workspace:*",
     "@felixos/db": "workspace:*",
     "@felixos/integrations": "workspace:*",
+    "@felixos/skills": "workspace:*",
     "@felixos/shared-types": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.3",

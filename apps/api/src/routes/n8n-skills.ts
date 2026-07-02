@@ -1,5 +1,7 @@
 import { encryptSecret } from "@felixos/auth";
+import { defaultRegistry } from "@felixos/agent";
 import { tenantN8nSkills } from "@felixos/db";
+import { isSkillNameSlug } from "@felixos/skills";
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -49,6 +51,21 @@ export const n8nSkillRoutes: FastifyPluginAsync = async (fastify) => {
         ? encryptSecret(body.webhookAuthValue, request.server.encryptionKey, request.server.keyId)
         : undefined;
     const now = new Date();
+    const updateSet = {
+      n8nWorkflowId: body.n8nWorkflowId!,
+      webhookUrl: body.webhookUrl!,
+      inputSchema: body.inputSchema ?? { type: "object" },
+      defaultRung: (body.defaultRung ?? "act-and-log") as TrustRung,
+      updatedAt: now,
+      ...(encrypted
+        ? {
+            webhookAuthHeader: body.webhookAuthHeader!,
+            webhookAuthCiphertext: encrypted.ciphertext,
+            webhookAuthNonce: encrypted.nonce,
+            webhookAuthKeyId: encrypted.keyId
+          }
+        : {})
+    };
 
     const [row] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
@@ -70,17 +87,7 @@ export const n8nSkillRoutes: FastifyPluginAsync = async (fastify) => {
           })
           .onConflictDoUpdate({
             target: [tenantN8nSkills.tenantId, tenantN8nSkills.skillName],
-            set: {
-              n8nWorkflowId: body.n8nWorkflowId!,
-              webhookUrl: body.webhookUrl!,
-              webhookAuthHeader: body.webhookAuthHeader ?? null,
-              webhookAuthCiphertext: encrypted?.ciphertext ?? null,
-              webhookAuthNonce: encrypted?.nonce ?? null,
-              webhookAuthKeyId: encrypted?.keyId ?? null,
-              inputSchema: body.inputSchema ?? { type: "object" },
-              defaultRung: (body.defaultRung ?? "act-and-log") as TrustRung,
-              updatedAt: now
-            }
+            set: updateSet
           })
           .returning()
       )
@@ -110,20 +117,21 @@ export const n8nSkillRoutes: FastifyPluginAsync = async (fastify) => {
 function validateRegistration(body: RegisterN8nSkillBody, n8nBaseUrl: string): string | undefined {
   if (!body.n8nWorkflowId?.trim()) return "n8nWorkflowId is required";
   if (!body.skillName?.trim()) return "skillName is required";
+  if (!isSkillNameSlug(body.skillName)) return "skillName must be a lowercase hyphenated slug";
+  if (defaultRegistry.get(body.skillName)) return "skillName collides with a built-in skill";
   if (!body.webhookUrl?.trim()) return "webhookUrl is required";
+  if (!n8nBaseUrl.trim()) return "n8n is not configured";
   if (body.webhookAuthValue && !body.webhookAuthHeader?.trim()) {
     return "webhookAuthHeader is required when webhookAuthValue is provided";
   }
-  if (body.defaultRung && !isValidRung(body.defaultRung)) {
+  if (body.defaultRung !== undefined && !isValidRung(body.defaultRung)) {
     return "defaultRung must be one of: suggest, draft-and-wait, act-and-log, full-auto";
   }
   try {
     const url = new URL(body.webhookUrl);
     if (url.protocol !== "https:" && url.protocol !== "http:") return "webhookUrl must be http(s)";
-    if (n8nBaseUrl) {
-      const baseUrl = new URL(n8nBaseUrl);
-      if (url.origin !== baseUrl.origin) return "webhookUrl must use the configured n8n origin";
-    }
+    const baseUrl = new URL(n8nBaseUrl);
+    if (url.origin !== baseUrl.origin) return "webhookUrl must use the configured n8n origin";
     if (!url.pathname.startsWith("/webhook/") && !url.pathname.startsWith("/webhook-test/")) {
       return "webhookUrl must point to an n8n webhook path";
     }

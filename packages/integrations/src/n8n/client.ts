@@ -43,6 +43,18 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
   const cache = new Map<string, CacheEntry<unknown>>();
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    return (await requestInternal<T>(path, init, false)) as T;
+  }
+
+  async function requestOptional<T>(path: string, init: RequestInit = {}): Promise<T | undefined> {
+    return requestInternal<T>(path, init, true);
+  }
+
+  async function requestInternal<T>(
+    path: string,
+    init: RequestInit = {},
+    optionalNotFound: boolean
+  ): Promise<T | undefined> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -58,7 +70,8 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
       });
 
       if (response.status === 404) {
-        return undefined as T;
+        if (optionalNotFound) return undefined;
+        throw new N8nUnavailableError("n8n resource not found");
       }
 
       if (!response.ok) {
@@ -100,7 +113,9 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
       );
     },
     getWorkflow(id) {
-      return request<N8nWorkflow | undefined>(`/workflows/${encodeURIComponent(id)}`);
+      return cached(`workflow:${id}`, () =>
+        requestOptional<N8nWorkflow>(`/workflows/${encodeURIComponent(id)}`)
+      );
     },
     activateWorkflow(id) {
       return request<N8nWorkflow>(`/workflows/${encodeURIComponent(id)}/activate`, {
@@ -119,7 +134,7 @@ export function createN8nClient(config: N8nClientConfig): N8nClient {
       );
     },
     getExecution(id) {
-      return request<N8nExecution | undefined>(`/executions/${encodeURIComponent(id)}`);
+      return requestOptional<N8nExecution>(`/executions/${encodeURIComponent(id)}`);
     },
     retryExecution(id) {
       return request<N8nExecution>(`/executions/${encodeURIComponent(id)}/retry`, {
