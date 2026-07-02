@@ -17,3 +17,10 @@ TypeScript end-to-end in a Turborepo monorepo. Postgres 18 + pgvector with Drizz
 Built horizontally, phase by phase. Each phase's plan decomposes into contracts-first, parallelizable GitHub issues so multiple agents can work different units concurrently. Tests are checkpoint gates per issue and integration gates per phase.
 
 Phases: 1 Foundation · 2 Knowledge core · 3 Agent + skills registry · 4 n8n integration · 5 Surfaces.
+
+## Deployment
+
+FelixOS is designed to be deployed to a VPS using Docker Compose. For operators setting up a new instance, follow these runbooks in order:
+- **[VPS Deployment Runbook](docs/deploy/vps-compose.md)**: Setup, secrets, build, and provisioning steps.
+- **[Edge Security](docs/deploy/edge-security.md)**: Verifying HTTPS, rate limiting, and private port configurations.
+- **[Backup, Restore & Rollbacks](docs/deploy/backup-restore.md)**: Securing your encrypted TOTP keys and database volumes.
