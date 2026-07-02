@@ -7,6 +7,14 @@ const apiOrigin = process.env.FELIXOS_API_ORIGIN ?? "http://localhost:3001";
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData();
 
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  
+  const getRedirectUrl = (path: string) => {
+    const url = new URL(path, request.url);
+    if (host) url.host = host;
+    return url;
+  };
+
   let response: Response;
   try {
     response = await fetch(`${apiOrigin}/auth/login`, {
@@ -16,14 +24,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       cache: "no-store"
     });
   } catch {
-    return NextResponse.redirect(new URL("/login?error=unavailable", request.url), 303);
+    return NextResponse.redirect(getRedirectUrl("/login?error=unavailable"), 303);
   }
 
   if (!response.ok) {
-    return NextResponse.redirect(new URL("/login?error=1", request.url), 303);
+    return NextResponse.redirect(getRedirectUrl("/login?error=1"), 303);
   }
 
-  const redirect = NextResponse.redirect(new URL("/", request.url), 303);
+  const redirect = NextResponse.redirect(getRedirectUrl("/"), 303);
   const setCookie = response.headers.get("set-cookie");
 
   if (setCookie) {

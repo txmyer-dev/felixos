@@ -10,6 +10,9 @@ COPY apps/api/package.json ./apps/api/
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/db/package.json ./packages/db/
 COPY packages/auth/package.json ./packages/auth/
+COPY packages/integrations/package.json ./packages/integrations/
+COPY packages/agent/package.json ./packages/agent/
+COPY packages/skills/package.json ./packages/skills/
 RUN --mount=type=cache,id=pnpm-api,target=/pnpm/store pnpm install --frozen-lockfile
 
 FROM node:24-slim AS runner
@@ -21,14 +24,25 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=deps /app/packages/auth/node_modules ./packages/auth/node_modules
+COPY --from=deps /app/packages/integrations/node_modules ./packages/integrations/node_modules
+COPY --from=deps /app/packages/agent/node_modules ./packages/agent/node_modules
+COPY --from=deps /app/packages/skills/node_modules ./packages/skills/node_modules
+
 COPY tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/db/package.json ./packages/db/
 COPY packages/auth/package.json ./packages/auth/
+COPY packages/integrations/package.json ./packages/integrations/
+COPY packages/agent/package.json ./packages/agent/
+COPY packages/skills/package.json ./packages/skills/
 COPY apps/api/package.json ./apps/api/
+
 COPY packages/shared-types/src ./packages/shared-types/src
 COPY packages/db/src ./packages/db/src
 COPY packages/auth/src ./packages/auth/src
+COPY packages/integrations/src ./packages/integrations/src
+COPY packages/agent/src ./packages/agent/src
+COPY packages/skills/src ./packages/skills/src
 COPY apps/api/src ./apps/api/src
 COPY apps/api/tsconfig.json ./apps/api/
 
