@@ -46,9 +46,23 @@ export type ReverseRecord<TInput = unknown, TResult = unknown, TReversal = unkno
 export type Skill<TInput = unknown, TOutput = unknown> = {
   descriptor: SkillDescriptor;
   /**
-   * Plan the change: resolve references and validate. Returns the planned
-   * outcome, or a `NeedsClarification` signal when a reference is ambiguous.
-   * Must not commit a side effect for skills that also define `afterApproval`.
+   * Plan/commit skills (`commitsInAfterApproval: true`) split work in two:
+   * `execute` is a side-effect-free planning + validation + reference-resolution
+   * step (which may return `NeedsClarification`), and `afterApproval` is the sole
+   * commit path. The trust ladder then treats the rung as pure timing — act-and-log
+   * and full-auto call `execute` then `afterApproval`; draft-and-wait calls
+   * `execute` only to surface a clarification and defers `afterApproval` to approval.
+   *
+   * Legacy single-effect skills leave this `false`/undefined: `execute` performs
+   * the side effect (used at act-and-log/full-auto), or `afterApproval` does (used
+   * on draft-and-wait approval), and the ladder calls exactly one of them. Setting
+   * this true on a skill whose `execute` has side effects would double-commit.
+   */
+  commitsInAfterApproval?: boolean;
+  /**
+   * Plan the change (plan/commit skills) or perform it (legacy act-and-log
+   * skills). Returns the planned/actual outcome, or `NeedsClarification` when a
+   * reference is ambiguous.
    */
   execute(input: TInput, ctx: SkillContext): Promise<TOutput | NeedsClarification>;
   /** Commit the planned change. The sole write path for plan/commit skills. */
