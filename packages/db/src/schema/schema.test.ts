@@ -12,7 +12,8 @@ const migrationUrls = [
   new URL("../../migrations/0004_agent_schema.sql", import.meta.url),
   new URL("../../migrations/0005_agent_rls.sql", import.meta.url),
   new URL("../../migrations/0006_n8n_schema.sql", import.meta.url),
-  new URL("../../migrations/0007_n8n_rls.sql", import.meta.url)
+  new URL("../../migrations/0007_n8n_rls.sql", import.meta.url),
+  new URL("../../migrations/0008_record_agent_audit.sql", import.meta.url)
 ];
 
 async function readMigration(url: URL) {
@@ -102,6 +103,17 @@ describe("foundation schema migration", () => {
     expect(migration).toContain("GRANT SELECT, INSERT, UPDATE, DELETE");
   });
 
+  test("defines the reversible audit trail on pending_actions", async () => {
+    const migration = await readMigration(migrationUrls[8]!);
+
+    expect(migration).toContain(
+      "ALTER TYPE pending_action_status ADD VALUE IF NOT EXISTS 'reversed'"
+    );
+    expect(migration).toContain("ADD COLUMN result jsonb");
+    expect(migration).toContain("ADD COLUMN reversal jsonb");
+    expect(migration).toContain("ADD COLUMN reversed_at timestamptz");
+  });
+
   test.skipIf(!process.env.TEST_DATABASE_URL)(
     "applies to Postgres with pgvector and enforces required tenant_id columns",
     async () => {
@@ -175,6 +187,27 @@ describe("foundation schema migration", () => {
           "tenant_inference_configs",
           "tenant_skill_rungs"
         ]);
+
+        const auditColumns = await sql<{ column_name: string }[]>`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = ${schemaName}
+            AND table_name = 'pending_actions'
+            AND column_name IN ('result', 'reversal', 'reversed_at')
+        `;
+        expect(auditColumns.map((row) => row.column_name).sort()).toEqual([
+          "result",
+          "reversal",
+          "reversed_at"
+        ]);
+
+        const statusValues = await sql<{ enumlabel: string }[]>`
+          SELECT enumlabel
+          FROM pg_enum e
+          JOIN pg_type t ON t.oid = e.enumtypid
+          WHERE t.typname = 'pending_action_status'
+        `;
+        expect(statusValues.map((row) => row.enumlabel)).toContain("reversed");
       } finally {
         await sql.unsafe(`DROP SCHEMA IF EXISTS ${quotedSchemaName} CASCADE`);
         await sql.end({ timeout: 5 });

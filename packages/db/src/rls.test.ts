@@ -19,7 +19,8 @@ const migrationUrls = [
   new URL("../migrations/0004_agent_schema.sql", import.meta.url),
   new URL("../migrations/0005_agent_rls.sql", import.meta.url),
   new URL("../migrations/0006_n8n_schema.sql", import.meta.url),
-  new URL("../migrations/0007_n8n_rls.sql", import.meta.url)
+  new URL("../migrations/0007_n8n_rls.sql", import.meta.url),
+  new URL("../migrations/0008_record_agent_audit.sql", import.meta.url)
 ];
 
 const databaseUrl = process.env.TEST_DATABASE_URL;

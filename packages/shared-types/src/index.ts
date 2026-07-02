@@ -52,4 +52,9 @@ export type {
   PageInfo
 } from "./api.js";
 export type { SkillDescriptor, SkillKind, SkillSideEffectClass, TrustRung } from "./skills.js";
-export type { PendingActionStatus, PendingActionView } from "./agent.js";
+export type {
+  AgentClarification,
+  ClarificationOption,
+  PendingActionStatus,
+  PendingActionView
+} from "./agent.js";

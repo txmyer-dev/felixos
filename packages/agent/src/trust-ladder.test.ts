@@ -104,6 +104,114 @@ describe("trust ladder", () => {
   });
 });
 
+describe("trust ladder — plan/commit skills", () => {
+  it("surfaces a clarification without queuing or committing", async () => {
+    const execute = vi.fn(async () => ({
+      kind: "needs-clarification" as const,
+      question: "Which Acme?",
+      options: [{ label: "Acme Corp", accountId: "a-1" }]
+    }));
+    const afterApproval = vi.fn(async () => ({ result: { id: "x" } }));
+    const skill = makePlanCommitSkill({ defaultRung: "act-and-log", execute, afterApproval });
+    const store = makeStore();
+
+    await expect(
+      invokeThroughTrustLadder(skill, { accountName: "Acme" }, context, store)
+    ).resolves.toEqual({
+      kind: "clarification",
+      skillName: "update-thing",
+      question: "Which Acme?",
+      options: [{ label: "Acme Corp", accountId: "a-1" }]
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(afterApproval).not.toHaveBeenCalled();
+    expect(store.insertions).toEqual([]);
+  });
+
+  it("draft-and-wait plans via execute but defers the commit to approval", async () => {
+    const execute = vi.fn(async () => ({ planned: true }));
+    const afterApproval = vi.fn(async () => ({ result: { id: "x" } }));
+    const skill = makePlanCommitSkill({ defaultRung: "draft-and-wait", execute, afterApproval });
+    const store = makeStore({ pendingId: "pending-1" });
+
+    await expect(
+      invokeThroughTrustLadder(skill, { field: "value" }, context, store)
+    ).resolves.toEqual({ kind: "pending", id: "pending-1", skillName: "update-thing" });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(afterApproval).not.toHaveBeenCalled();
+    expect(store.insertions).toEqual([
+      {
+        payload: { field: "value" },
+        result: undefined,
+        skillName: "update-thing",
+        status: "pending",
+        tenantId: "tenant-1"
+      }
+    ]);
+  });
+
+  it("act-and-log commits via afterApproval and logs result + reversal", async () => {
+    const execute = vi.fn(async () => ({ planned: true }));
+    const afterApproval = vi.fn(async () => ({
+      result: { id: "row-1" },
+      reversal: { before: { stage: "new" } }
+    }));
+    const skill = makePlanCommitSkill({ defaultRung: "act-and-log", execute, afterApproval });
+    const store = makeStore({ pendingId: "executed-1" });
+
+    await expect(
+      invokeThroughTrustLadder(skill, { field: "value" }, context, store)
+    ).resolves.toEqual({
+      kind: "executed",
+      skillName: "update-thing",
+      result: { id: "row-1" }
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(afterApproval).toHaveBeenCalledTimes(1);
+    expect(store.insertions).toEqual([
+      {
+        payload: { field: "value" },
+        result: { id: "row-1" },
+        reversal: { before: { stage: "new" } },
+        skillName: "update-thing",
+        status: "executed",
+        tenantId: "tenant-1"
+      }
+    ]);
+  });
+
+  it("promotion fix: a plan/commit skill at act-and-log actually commits via afterApproval", async () => {
+    // Regression guard for the latent bug: previously act-and-log called execute
+    // only, so a skill whose write lives in afterApproval logged an executed action
+    // without ever writing. It must now call afterApproval.
+    const execute = vi.fn(async () => ({ planned: true }));
+    const writes: string[] = [];
+    const afterApproval = vi.fn(async () => {
+      writes.push("committed");
+      return { result: { id: "row-1" } };
+    });
+    const skill = makePlanCommitSkill({ defaultRung: "act-and-log", execute, afterApproval });
+    const store = makeStore();
+
+    await invokeThroughTrustLadder(skill, { field: "value" }, context, store);
+
+    expect(writes).toEqual(["committed"]);
+  });
+
+  it("full-auto commits via afterApproval without logging", async () => {
+    const execute = vi.fn(async () => ({ planned: true }));
+    const afterApproval = vi.fn(async () => ({ result: { id: "row-1" } }));
+    const skill = makePlanCommitSkill({ defaultRung: "full-auto", execute, afterApproval });
+    const store = makeStore();
+
+    await expect(
+      invokeThroughTrustLadder(skill, { field: "value" }, context, store)
+    ).resolves.toEqual({ kind: "executed", skillName: "update-thing", result: { id: "row-1" } });
+    expect(afterApproval).toHaveBeenCalledTimes(1);
+    expect(store.insertions).toEqual([]);
+  });
+});
+
 const context = {
   tenantId: "tenant-1",
   scopedDb: {} as SkillContext["scopedDb"],
@@ -129,6 +237,28 @@ function makeSkill(overrides: {
   };
 }
 
+function makePlanCommitSkill(overrides: {
+  defaultRung: Skill["descriptor"]["defaultRung"];
+  execute: Skill<Record<string, unknown>, unknown>["execute"];
+  afterApproval?: Skill<Record<string, unknown>, unknown>["afterApproval"];
+}): Skill<Record<string, unknown>, unknown> {
+  return {
+    descriptor: {
+      name: "update-thing",
+      purpose: "Update a thing. USE WHEN update thing.",
+      triggers: ["update thing"],
+      kind: "action",
+      inputSchema: { type: "object" },
+      sideEffectClass: "write",
+      defaultRung: overrides.defaultRung,
+      requiresInference: false
+    },
+    commitsInAfterApproval: true,
+    execute: overrides.execute,
+    ...(overrides.afterApproval ? { afterApproval: overrides.afterApproval } : {})
+  };
+}
+
 function makeStore(
   opts: {
     rung?: Skill["descriptor"]["defaultRung"];
@@ -141,6 +271,7 @@ function makeStore(
     payload: unknown;
     status: "pending" | "executed";
     result?: unknown;
+    reversal?: unknown;
   }>;
 } {
   const insertions: Array<{

@@ -27,7 +27,14 @@ const isValidRung = createSetGuard<TrustRung>(
   new Set<TrustRung>(["suggest", "draft-and-wait", "act-and-log", "full-auto"])
 );
 const isPendingActionStatus = createSetGuard<PendingActionStatus>(
-  new Set<PendingActionStatus>(["pending", "approved", "rejected", "executed", "failed"])
+  new Set<PendingActionStatus>([
+    "pending",
+    "approved",
+    "rejected",
+    "executed",
+    "failed",
+    "reversed"
+  ])
 );
 
 type AgentRunBody = {
@@ -118,7 +125,7 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     if (!isPendingActionStatus(status)) {
       return sendBadRequest(
         reply,
-        "status must be one of: pending, approved, rejected, executed, failed"
+        "status must be one of: pending, approved, rejected, executed, failed, reversed"
       );
     }
 
@@ -197,18 +204,30 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       encryptionKey: request.server.encryptionKey
     };
 
+    let outcome: { result?: unknown; reversal?: unknown } | void | undefined;
     if (skill?.afterApproval) {
-      await withRequestTenant(request, () =>
+      outcome = await withRequestTenant(request, () =>
         skill.afterApproval!(row.payload as Parameters<typeof skill.afterApproval>[0], skillCtx)
       );
     }
 
+    // Persist the commit's result/reversal so the executed ledger row is
+    // reversible — mirrors the act-and-log path in the trust-ladder store.
     const nextStatus = skill?.afterApproval ? "executed" : "approved";
     const [updated] = await withRequestTenant(request, () =>
       request.server.scopedDb.transaction((tx) =>
         tx
           .update(pendingActions)
-          .set({ status: nextStatus, updatedAt: new Date() })
+          .set({
+            status: nextStatus,
+            ...(outcome && "result" in outcome && outcome.result !== undefined
+              ? { result: outcome.result as Record<string, unknown> }
+              : {}),
+            ...(outcome && "reversal" in outcome && outcome.reversal !== undefined
+              ? { reversal: outcome.reversal as Record<string, unknown> }
+              : {}),
+            updatedAt: new Date()
+          })
           .where(eq(pendingActions.id, request.params.id))
           .returning()
       )
@@ -301,6 +320,7 @@ function toPendingActionView(row: typeof pendingActions.$inferSelect) {
     status: row.status,
     targetEntityId: resolveTargetEntityId(row.payload),
     agentContext: row.agentContext,
+    reversedAt: row.reversedAt ? row.reversedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

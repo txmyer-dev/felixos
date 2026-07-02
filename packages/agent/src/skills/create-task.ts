@@ -1,4 +1,5 @@
 import { interactions, runWithTenantContext } from "@felixos/db";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import type { Skill, SkillContext } from "@felixos/skills";
@@ -36,6 +37,11 @@ export const CreateTaskSkill: Skill<CreateTaskInput, CreateTaskOutput> = {
     requiresInference: true
   },
 
+  // Plan/commit: execute only normalizes the input (no write); afterApproval is
+  // the sole commit path. This keeps the skill correct at every rung — promoting
+  // it to act-and-log now commits via afterApproval instead of silently no-op'ing.
+  commitsInAfterApproval: true,
+
   async execute(input: CreateTaskInput): Promise<CreateTaskOutput> {
     return {
       accountId: input.accountId,
@@ -44,19 +50,33 @@ export const CreateTaskSkill: Skill<CreateTaskInput, CreateTaskOutput> = {
     };
   },
 
-  async afterApproval(payload: CreateTaskInput, ctx: SkillContext): Promise<void> {
+  async afterApproval(payload: CreateTaskInput, ctx: SkillContext) {
+    const id = randomUUID();
     const occurredAt = payload.occurredAt ?? new Date().toISOString();
 
     await runWithTenantContext(ctx.tenantId, () =>
       ctx.scopedDb.transaction((tx) =>
         tx.insert(interactions).values({
-          id: randomUUID(),
+          id,
           tenantId: ctx.tenantId,
           accountId: payload.accountId,
           kind: "task",
           occurredAt: new Date(occurredAt),
           summary: payload.summary
         })
+      )
+    );
+
+    return { result: { interactionId: id }, reversal: { interactionId: id } };
+  },
+
+  async reverse(record, ctx: SkillContext) {
+    const interactionId = (record.reversal as { interactionId?: string } | null)?.interactionId;
+    if (!interactionId) return;
+
+    await runWithTenantContext(ctx.tenantId, () =>
+      ctx.scopedDb.transaction((tx) =>
+        tx.delete(interactions).where(eq(interactions.id, interactionId))
       )
     );
   }

@@ -3,8 +3,11 @@ import {
   createPrivilegedDatabaseClient,
   createScopedDatabaseClient,
   createSqlClient,
+  pendingActions,
+  runWithTenantContext,
   type DatabaseSql
 } from "@felixos/db";
+import { eq } from "drizzle-orm";
 import {
   defaultRegistry,
   createDbTrustLadderStore,
@@ -34,7 +37,8 @@ const migrationUrls = [
   new URL("../../../packages/db/migrations/0004_agent_schema.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0005_agent_rls.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0006_n8n_schema.sql", import.meta.url),
-  new URL("../../../packages/db/migrations/0007_n8n_rls.sql", import.meta.url)
+  new URL("../../../packages/db/migrations/0007_n8n_rls.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0008_record_agent_audit.sql", import.meta.url)
 ];
 const appRoleName = "felixos_app_role";
 
@@ -245,6 +249,17 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
     });
     expect(approveRes.statusCode).toBe(200);
     expect(approveRes.json().data.status).toBe("executed");
+
+    // The approve route must persist afterApproval's reversal so the executed
+    // action is undoable once U7 wires the reverse endpoint.
+    const [executedRow] = await runWithTenantContext(tenantAId, () =>
+      scopedDb.transaction((tx) =>
+        tx.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1)
+      )
+    );
+    expect(
+      (executedRow?.reversal as { interactionId?: string } | null)?.interactionId
+    ).toBeTruthy();
 
     const interactionsRes = await server.inject({
       method: "GET",

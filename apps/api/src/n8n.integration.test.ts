@@ -32,7 +32,8 @@ const migrationUrls = [
   new URL("../../../packages/db/migrations/0004_agent_schema.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0005_agent_rls.sql", import.meta.url),
   new URL("../../../packages/db/migrations/0006_n8n_schema.sql", import.meta.url),
-  new URL("../../../packages/db/migrations/0007_n8n_rls.sql", import.meta.url)
+  new URL("../../../packages/db/migrations/0007_n8n_rls.sql", import.meta.url),
+  new URL("../../../packages/db/migrations/0008_record_agent_audit.sql", import.meta.url)
 ];
 const appRoleName = "felixos_app_role";
 

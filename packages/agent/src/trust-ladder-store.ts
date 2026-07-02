@@ -39,6 +39,13 @@ export function createDbTrustLadderStore(opts: {
             skillName: row.skillName,
             payload: row.payload as Record<string, unknown>,
             status: row.status,
+            ...(row.result !== undefined ? { result: row.result as Record<string, unknown> } : {}),
+            ...(row.reversal !== undefined
+              ? { reversal: row.reversal as Record<string, unknown> }
+              : {}),
+            // Back-compat: existing Today/triage readers surface agentContext as
+            // the executed-item detail; keep populating it until U7's executed
+            // view derives display text from the structured `result` column.
             ...(row.result !== undefined ? { agentContext: JSON.stringify(row.result) } : {})
           })
         )
