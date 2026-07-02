@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyRef, isUuid, type RefCandidate } from "./entity-ref.js";
+import { classifyRef, isUuid, resolveOrClarify, type RefCandidate } from "./entity-ref.js";
 
 const acme: RefCandidate = { id: "11111111-1111-1111-1111-111111111111", name: "Acme Corp" };
 const acmeSub: RefCandidate = {
@@ -52,5 +52,44 @@ describe("classifyRef", () => {
   it("returns none for no match and for empty input", () => {
     expect(classifyRef("Nonexistent", [acme, globex])).toEqual({ kind: "none" });
     expect(classifyRef("   ", [acme])).toEqual({ kind: "none" });
+  });
+});
+
+describe("resolveOrClarify", () => {
+  it("returns the id for a resolved reference", () => {
+    expect(
+      resolveOrClarify(
+        "Acme",
+        { kind: "resolved", id: acme.id, name: "Acme Corp" },
+        "account",
+        "accountId"
+      )
+    ).toEqual({ id: acme.id });
+  });
+
+  it("maps ambiguous candidates to clarification options carrying the id key", () => {
+    const result = resolveOrClarify(
+      "Acme",
+      {
+        kind: "ambiguous",
+        candidates: [{ id: acme.id, name: "Acme Corp", detail: "client" }, acmeSub]
+      },
+      "account",
+      "accountId"
+    );
+    expect(result).toEqual({
+      kind: "needs-clarification",
+      question: 'Which account did you mean by "Acme"?',
+      options: [
+        { label: "Acme Corp (client)", accountId: acme.id },
+        { label: "Acme Subsidiary", accountId: acmeSub.id }
+      ]
+    });
+  });
+
+  it("returns a clarification with no options for no match", () => {
+    const result = resolveOrClarify("Zzz", { kind: "none" }, "contact", "contactId");
+    expect(result).toMatchObject({ kind: "needs-clarification", options: [] });
+    expect((result as { question: string }).question).toContain("No contact matches");
   });
 });

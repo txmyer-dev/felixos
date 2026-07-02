@@ -276,6 +276,105 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
     expect(tasks).toHaveLength(1);
   });
 
+  it("create-account act-and-log creates a tenant-scoped entity that reverse deletes", async () => {
+    const skill = defaultRegistry.get("create-account")!;
+    const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
+    const ctx = { tenantId: tenantAId, scopedDb, provider: {} };
+
+    const outcome = await invokeThroughTrustLadder(skill, { name: "Reversible Co" }, ctx, store);
+    expect(outcome.kind).toBe("executed");
+    const entityId = (outcome as { result: { entityId: string } }).result.entityId;
+
+    const listA = await server.inject({
+      method: "GET",
+      url: "/entities",
+      headers: { cookie: tenantACookie }
+    });
+    expect(listA.json().data.some((e: { id: string }) => e.id === entityId)).toBe(true);
+
+    const listB = await server.inject({
+      method: "GET",
+      url: "/entities",
+      headers: { cookie: tenantBCookie }
+    });
+    expect(listB.json().data.some((e: { id: string }) => e.id === entityId)).toBe(false);
+
+    await skill.reverse!(
+      {
+        payload: { name: "Reversible Co" },
+        result: { entityId },
+        reversal: { deletedEntityId: entityId }
+      },
+      ctx
+    );
+
+    const listAfter = await server.inject({
+      method: "GET",
+      url: "/entities",
+      headers: { cookie: tenantACookie }
+    });
+    expect(listAfter.json().data.some((e: { id: string }) => e.id === entityId)).toBe(false);
+  });
+
+  it("create-contact returns a clarification (no write) when the account is ambiguous", async () => {
+    for (let i = 0; i < 2; i++) {
+      const res = await server.inject({
+        method: "POST",
+        url: "/entities",
+        headers: { cookie: tenantACookie },
+        payload: { name: "Ambiguous Ltd", lifecycleStage: "prospect" }
+      });
+      expect(res.statusCode).toBe(201);
+    }
+
+    const skill = defaultRegistry.get("create-contact")!;
+    const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
+    const ctx = { tenantId: tenantAId, scopedDb, provider: {} };
+
+    const outcome = await invokeThroughTrustLadder(
+      skill,
+      { account: "Ambiguous Ltd", name: "Jordan" },
+      ctx,
+      store
+    );
+    expect(outcome.kind).toBe("clarification");
+    expect("options" in outcome && outcome.options.length).toBe(2);
+  });
+
+  it("log-interaction act-and-log records an interaction under the resolved account", async () => {
+    const accountRes = await server.inject({
+      method: "POST",
+      url: "/entities",
+      headers: { cookie: tenantACookie },
+      payload: { name: "Loggable Inc", lifecycleStage: "client" }
+    });
+    const accountId = accountRes.json().data.id;
+
+    const skill = defaultRegistry.get("log-interaction")!;
+    const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
+    const ctx = { tenantId: tenantAId, scopedDb, provider: {} };
+
+    const outcome = await invokeThroughTrustLadder(
+      skill,
+      { account: "Loggable Inc", kind: "call", summary: "Kickoff call" },
+      ctx,
+      store
+    );
+    expect(outcome.kind).toBe("executed");
+
+    const interactionsRes = await server.inject({
+      method: "GET",
+      url: `/interactions?accountId=${accountId}`,
+      headers: { cookie: tenantACookie }
+    });
+    const logged = interactionsRes
+      .json()
+      .data.filter(
+        (i: { kind: string; summary: string }) => i.kind === "call" && i.summary === "Kickoff call"
+      );
+    expect(logged).toHaveLength(1);
+  });
+
   it("trust ladder bypass — Tenant B cannot approve Tenant A pending action (404 via RLS)", async () => {
     const store = createDbTrustLadderStore({ scopedDb, tenantId: tenantAId });
     const ctx = { tenantId: tenantAId, scopedDb, provider: {} };
@@ -352,6 +451,9 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
     expect(names).toContain("youtube-capture");
     expect(names).toContain("draft-email");
     expect(names).toContain("create-task");
+    expect(names).toContain("create-account");
+    expect(names).toContain("create-contact");
+    expect(names).toContain("log-interaction");
   });
 
   it("GET /agent/pending returns only pending status by default", async () => {
