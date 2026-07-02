@@ -62,6 +62,9 @@ export async function resolveEntityRef(opts: {
       tx
         .select({ id: entities.id, name: entities.name, stage: entities.lifecycleStage })
         .from(entities)
+        // RLS already scopes this to the tenant; the explicit predicate matches
+        // resolveContactRef and the codebase's defense-in-depth convention.
+        .where(eq(entities.tenantId, opts.tenantId))
     )
   );
   return classifyRef(

@@ -71,6 +71,10 @@ async function invokePlanCommit(
   }
 
   if (rung === "draft-and-wait") {
+    // Store the raw input as the payload. afterApproval (invoked by the approval
+    // route) re-derives references and captures before-state at commit time —
+    // deliberately later than plan time, so an edit's reversal reflects the row
+    // as it actually was when approved, not a value that may have since drifted.
     const id = await store.insertPendingAction({
       tenantId: context.tenantId,
       skillName,
@@ -80,8 +84,15 @@ async function invokePlanCommit(
     return { kind: "pending", id, skillName };
   }
 
-  // act-and-log or full-auto: commit now via afterApproval.
-  const outcome = skill.afterApproval ? await skill.afterApproval(input, context) : undefined;
+  // act-and-log or full-auto: commit now. afterApproval is a plan/commit skill's
+  // sole write path; reaching a commit rung without it would log an executed
+  // action that never wrote — the exact bug this model prevents — so fail loud.
+  if (!skill.afterApproval) {
+    throw new Error(
+      `Skill "${skillName}" sets commitsInAfterApproval but defines no afterApproval to commit`
+    );
+  }
+  const outcome = await skill.afterApproval(input, context);
   const result =
     outcome && "result" in outcome && outcome.result !== undefined ? outcome.result : planned;
   const reversal = outcome && "reversal" in outcome ? outcome.reversal : undefined;

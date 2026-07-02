@@ -3,8 +3,11 @@ import {
   createPrivilegedDatabaseClient,
   createScopedDatabaseClient,
   createSqlClient,
+  pendingActions,
+  runWithTenantContext,
   type DatabaseSql
 } from "@felixos/db";
+import { eq } from "drizzle-orm";
 import {
   defaultRegistry,
   createDbTrustLadderStore,
@@ -246,6 +249,17 @@ describe.skipIf(!databaseUrl || !privilegedDatabaseUrl)("Agent phase-gate integr
     });
     expect(approveRes.statusCode).toBe(200);
     expect(approveRes.json().data.status).toBe("executed");
+
+    // The approve route must persist afterApproval's reversal so the executed
+    // action is undoable once U7 wires the reverse endpoint.
+    const [executedRow] = await runWithTenantContext(tenantAId, () =>
+      scopedDb.transaction((tx) =>
+        tx.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1)
+      )
+    );
+    expect(
+      (executedRow?.reversal as { interactionId?: string } | null)?.interactionId
+    ).toBeTruthy();
 
     const interactionsRes = await server.inject({
       method: "GET",
