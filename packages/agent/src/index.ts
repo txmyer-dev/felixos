@@ -30,4 +30,13 @@ export { createN8nWorkflowSkill } from "./skills/n8n-workflow.js";
 export { createDbTrustLadderStore } from "./trust-ladder-store.js";
 export { createSkillTool } from "./tools/skill-tool.js";
 export type { RefCandidate, RefResolution } from "./lib/entity-ref.js";
-export { classifyRef, isUuid, resolveContactRef, resolveEntityRef } from "./lib/entity-ref.js";
+export {
+  classifyRef,
+  isUuid,
+  resolveContactRef,
+  resolveEntityRef,
+  resolveOrClarify
+} from "./lib/entity-ref.js";
+export { CreateAccountSkill } from "./skills/create-account.js";
+export { CreateContactSkill } from "./skills/create-contact.js";
+export { LogInteractionSkill } from "./skills/log-interaction.js";

@@ -1,6 +1,8 @@
 import { contacts, entities, runWithTenantContext, type ScopedDatabaseClient } from "@felixos/db";
 import { and, eq } from "drizzle-orm";
 
+import type { NeedsClarification } from "@felixos/skills";
+
 /**
  * Resolves a natural-language reference ("Acme", "the Acme deal owner") to a
  * tenant-scoped entity or contact id. All reads go through the ALS-scoped,
@@ -50,6 +52,39 @@ export function classifyRef(ref: string, candidates: RefCandidate[]): RefResolut
   if (fuzzy.length > 0) return { kind: "ambiguous", candidates: fuzzy };
 
   return { kind: "none" };
+}
+
+/**
+ * Bridge a RefResolution into what a plan/commit skill's `execute` returns:
+ * a resolved `{ id }`, or a `NeedsClarification` the trust ladder surfaces
+ * without writing. `noun` labels the question; `idKey` is the option field the
+ * follow-up agent turn reads back (e.g. "accountId") so the stateless run stays
+ * self-contained.
+ */
+export function resolveOrClarify(
+  ref: string,
+  resolution: RefResolution,
+  noun: string,
+  idKey: string
+): { id: string } | NeedsClarification {
+  if (resolution.kind === "resolved") {
+    return { id: resolution.id };
+  }
+  if (resolution.kind === "ambiguous") {
+    return {
+      kind: "needs-clarification",
+      question: `Which ${noun} did you mean by "${ref}"?`,
+      options: resolution.candidates.map((c) => ({
+        label: c.detail ? `${c.name} (${c.detail})` : c.name,
+        [idKey]: c.id
+      }))
+    };
+  }
+  return {
+    kind: "needs-clarification",
+    question: `No ${noun} matches "${ref}". Reply with the exact ${noun} name, or create it first.`,
+    options: []
+  };
 }
 
 export async function resolveEntityRef(opts: {
