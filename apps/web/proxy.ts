@@ -17,6 +17,8 @@ export function proxy(request: NextRequest): NextResponse {
 
   if (!request.cookies.has(sessionCookieName)) {
     const loginUrl = new URL("/login", request.url);
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    if (host) loginUrl.host = host;
     return NextResponse.redirect(loginUrl);
   }
 

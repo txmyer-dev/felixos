@@ -49,4 +49,15 @@ EOSQL
 
 provision felixos_app_role        "$APP_DB_USER"  "$APP_DB_PASS"
 provision felixos_privileged_role "$PRIV_DB_USER" "$PRIV_DB_PASS"
+
+# BYPASSRLS is not inherited from the group role, so it must be set explicitly on the login user.
+psql -v u="$PRIV_DB_USER" <<'EOSQL'
+SELECT set_config('prov.u', :'u', false);
+DO $body$
+BEGIN
+  EXECUTE format('ALTER USER %I BYPASSRLS', current_setting('prov.u'));
+END
+$body$;
+EOSQL
+
 echo 'Bootstrap complete'

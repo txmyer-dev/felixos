@@ -27,14 +27,16 @@ if (!databaseUrl) {
 
 const db = createPrivilegedDatabaseClient(databaseUrl);
 
-try {
-  const encryptionKey = readTotpEncryptionKey(rawKey);
-  await seedDemoTenant(db);
-  await ensureDemoLoginSecret(encryptionKey);
-  console.log(`Seeded demo tenant: ${demoTenant.slug}`);
-  console.log(`Demo TOTP secret: ${demoTotpSecret}`);
-} finally {
-  await db.end();
+async function run() {
+  try {
+    const encryptionKey = readTotpEncryptionKey(rawKey);
+    await seedDemoTenant(db);
+    await ensureDemoLoginSecret(encryptionKey);
+    console.log(`Seeded demo tenant: ${demoTenant.slug}`);
+    console.log(`Demo TOTP secret: ${demoTotpSecret}`);
+  } finally {
+    await db.end();
+  }
 }
 
 async function ensureDemoLoginSecret(encryptionKey: Buffer): Promise<void> {
@@ -58,3 +60,8 @@ async function ensureDemoLoginSecret(encryptionKey: Buffer): Promise<void> {
     );
   });
 }
+
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
