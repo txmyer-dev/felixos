@@ -3,7 +3,9 @@
 Operational data, TOTP secrets, recovery-code hashes, and integration data are stored in the Postgres database. This document details how to back up and restore your FelixOS deployment.
 
 ## What to Back Up
+
 You must back up **two** separate components. A database backup is useless if you lose the encryption keys.
+
 1. **The Database**: The `postgres_data` Docker volume.
 2. **The Environment Secrets**: The `.env` file on the VPS.
 
@@ -11,15 +13,18 @@ You must back up **two** separate components. A database backup is useless if yo
 > If you lose the `TOTP_SECRET_ENCRYPTION_KEY` from your `.env` file, all encrypted TOTP secrets and n8n API keys in the database will become unrecoverable. Users will be permanently locked out. **Always back up `.env` off-host securely.**
 
 ## Creating a Backup
+
 Use `pg_dump` to create a logical backup of the `felixos` database from the running compose stack.
 
 ```bash
 # Run this on the VPS to dump the database to a file
 docker compose exec -T postgres pg_dump -U felixos_privileged felixos > felixos_backup_$(date +%F).sql
 ```
+
 Securely copy `felixos_backup_*.sql` and `.env` off the VPS to a secure storage location (e.g., AWS S3, local encrypted drive).
 
 ## Restoring from a Backup
+
 To restore a backup into a fresh environment:
 
 1. **Prepare the Stack**: Ensure your `.env` file is exactly the same as it was when the backup was taken.
@@ -40,14 +45,19 @@ To restore a backup into a fresh environment:
    ```
 
 ### Verification
+
 Run the following after a restore to ensure everything works:
+
 ```bash
 curl http://127.0.0.1:3006/health
 ```
+
 Then navigate to your public domain and log in to verify TOTP validation succeeds (which proves the encryption key matches).
 
 ## Application Rollbacks
+
 If an app update introduces a bug but no destructive database migrations were applied:
+
 ```bash
 # Checkout the previous working version
 git checkout <previous-tag-or-sha>

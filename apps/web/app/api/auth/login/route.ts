@@ -8,7 +8,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData();
 
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
-  
+
   const getRedirectUrl = (path: string) => {
     const url = new URL(path, request.url);
     if (host) url.host = host;
